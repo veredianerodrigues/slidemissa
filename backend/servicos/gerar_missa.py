@@ -25,7 +25,8 @@ BOX_WIDTH_CM  = 25.4
 BOX_HEIGHT_CM = 19.05
 
 FONT_NAME = "Verdana"
-MAX_LINES_PER_SLIDE = 7
+MAX_LINES_PER_SLIDE = 6
+MIN_LINES_PER_SLIDE = 4
 FIXED_FONT_SIZE = 55  # Deixe None para automático, ou coloque um valor (ex: 55) para fixar
 HEADER_RE    = re.compile(r'^\[(.+)\]\s*$')
 BRACKET_RE   = re.compile(r'\[([^\]]+)\]')
@@ -150,24 +151,24 @@ def estimate_max_lines(font_size_pt):
 
 def auto_split_large(block, font_min):
     lines = block['lines']
-    if not lines or len(lines) == 1:
-        return [block]
+    n = len(lines)
 
-    if len(lines) > MAX_LINES_PER_SLIDE:
-        blocks = []
-        for i in range(0, len(lines), MAX_LINES_PER_SLIDE):
-            sub_block = {
-                'lines': lines[i:i + MAX_LINES_PER_SLIDE],
-                'bold': block['bold']
-            }
-            blocks.append(sub_block)
-        return blocks
+    if n == 0:
+        return []
 
-    if estimate_lines_needed(lines, font_min) <= estimate_max_lines(font_min):
-        return [block]
-    mid   = max(1, len(lines) // 2)
-    left  = {'lines': lines[:mid],  'bold': block['bold']}
-    right = {'lines': lines[mid:],  'bold': block['bold']}
+    # Dentro do máximo e cabe visualmente: um slide só
+    if n <= MAX_LINES_PER_SLIDE:
+        if estimate_lines_needed(lines, font_min) <= estimate_max_lines(font_min):
+            return [block]
+        # Estouro visual mas não há linhas suficientes para dividir
+        # respeitando o mínimo nos dois lados: mantém inteiro
+        if n < MIN_LINES_PER_SLIDE * 2:
+            return [block]
+
+    # Precisa dividir: ponto central equilibrado entre MIN e MAX
+    mid = max(MIN_LINES_PER_SLIDE, min(MAX_LINES_PER_SLIDE, math.ceil(n / 2)))
+    left  = {'lines': lines[:mid], 'bold': block['bold']}
+    right = {'lines': lines[mid:], 'bold': block['bold']}
     return auto_split_large(left, font_min) + auto_split_large(right, font_min)
 
 
