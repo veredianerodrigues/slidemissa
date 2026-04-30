@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { obterPosicoes, listarCantos, gerarDoBanco, deletarCanto } from '../api';
+import { useState, useEffect, useRef } from 'react';
+import { obterPosicoes, listarCantos, gerarDoBanco, deletarCanto, deletarVarios, gerarPptxCantos } from '../api';
 import { useApi, downloadFile } from '../hooks/useApi';
 import './Banco.css';
 
@@ -12,14 +12,22 @@ export default function Banco() {
   const [pptxFile, setPptxFile] = useState(null);
   const [nomeSaida, setNomeSaida] = useState('missa_pronta');
   const [log, setLog] = useState([]);
+  const [deletando, setDeletando] = useState(false);
   const [modalAberto, setModalAberto] = useState(false);
   const [mensagemModal, setMensagemModal] = useState('');
   const [acaoModal, setAcaoModal] = useState(null);
+  const modalRef = useRef(null);
   const { call, loading, error, setError } = useApi();
 
   useEffect(() => {
     carregarDados();
   }, []);
+
+  useEffect(() => {
+    if (modalAberto && modalRef.current) {
+      modalRef.current.focus();
+    }
+  }, [modalAberto]);
 
   const carregarDados = async () => {
     try {
@@ -82,7 +90,7 @@ export default function Banco() {
     try {
       setLog(prev => [...prev, `Gerando com ${selecionados.size} canto(s)...`]);
       const chavesSelecionadas = Array.from(selecionados)
-        .map(id => cantos.find(c => c.id === parseInt(id, 10))?.chave)
+        .map(id => cantos.find(c => c.id === id)?.chave)
         .filter(chave => chave);
       const blob = await call(gerarDoBanco, pptxFile, chavesSelecionadas, nomeSaida);
       setLog(prev => [...prev, '✓ Apresentação gerada com sucesso!']);
@@ -94,20 +102,44 @@ export default function Banco() {
     }
   };
 
+  const handleGerarPptxCantos = async () => {
+    setLog([]);
+    setError(null);
+
+    if (selecionados.size === 0) {
+      setError('Selecione pelo menos um canto');
+      return;
+    }
+
+    try {
+      setLog(prev => [...prev, `Gerando PPTX com ${selecionados.size} canto(s)...`]);
+      const chavesSelecionadas = Array.from(selecionados)
+        .map(id => cantos.find(c => c.id === id)?.chave)
+        .filter(chave => chave);
+      const blob = await call(gerarPptxCantos, chavesSelecionadas, nomeSaida);
+      setLog(prev => [...prev, '✓ PPTX gerado com sucesso!']);
+
+      const filename = nomeSaida.endsWith('.pptx') ? nomeSaida : nomeSaida + '.pptx';
+      downloadFile(blob, filename);
+    } catch (err) {
+      setLog(prev => [...prev, '✗ Erro ao gerar PPTX']);
+    }
+  };
+
   const handleDeletar = (cantoId) => {
     setMensagemModal('Tem certeza que deseja deletar este canto?');
-    setAcaoModal(async () => {
+    setAcaoModal(() => async () => {
+      setDeletando(true);
       try {
-        const id = parseInt(cantoId, 10);
-        console.log('Deletando canto ID:', id, 'tipo:', typeof id);
-        await call(deletarCanto, id);
+        await deletarCanto(cantoId);
         setModalAberto(false);
         await carregarDados();
       } catch (err) {
-        console.error('Erro ao deletar:', err);
         const mensagemErro = err.response?.data?.detail || 'Erro ao deletar canto';
         setError(mensagemErro);
         setModalAberto(false);
+      } finally {
+        setDeletando(false);
       }
     });
     setModalAberto(true);
@@ -116,23 +148,22 @@ export default function Banco() {
   const handleDeletarSelecionados = () => {
     if (selecionados.size === 0) return;
     setMensagemModal(`Deletar ${selecionados.size} canto(s) selecionado(s)?`);
-    setAcaoModal(async () => {
+    setAcaoModal(() => async () => {
+      setDeletando(true);
       try {
         setLog([`Deletando ${selecionados.size} canto(s)...`]);
-        for (const cantoId of selecionados) {
-          const id = parseInt(cantoId, 10);
-          console.log('Deletando canto ID:', id, 'tipo:', typeof id);
-          await call(deletarCanto, id);
-        }
-        setLog([`✓ ${selecionados.size} canto(s) deletado(s)!`]);
+        const ids = Array.from(selecionados);
+        const { deletados } = await deletarVarios(ids);
+        setLog([`✓ ${deletados} canto(s) deletado(s)!`]);
         setModalAberto(false);
         setSelecionados(new Set());
         await carregarDados();
       } catch (err) {
-        console.error('Erro ao deletar:', err);
         const mensagemErro = err.response?.data?.detail || 'Erro ao deletar cantos';
         setLog([`✗ ${mensagemErro}`]);
         setModalAberto(false);
+      } finally {
+        setDeletando(false);
       }
     });
     setModalAberto(true);
@@ -148,6 +179,10 @@ export default function Banco() {
     setModalAberto(false);
     setAcaoModal(null);
     setMensagemModal('');
+  };
+
+  const handleModalKeyDown = (e) => {
+    if (e.key === 'Escape') cancelarModal();
   };
 
   return (
@@ -270,12 +305,20 @@ export default function Banco() {
           </button>
           <button
             onClick={handleDeletarSelecionados}
-            disabled={loading || selecionados.size === 0}
+            disabled={deletando || selecionados.size === 0}
             className="btn-delete-mass"
           >
-            {loading ? 'Deletando...' : `Deletar ${selecionados.size} selecionado(s)`}
+            {deletando ? 'Deletando...' : `Deletar ${selecionados.size} selecionado(s)`}
           </button>
         </div>
+
+        <button
+          onClick={handleGerarPptxCantos}
+          disabled={loading || selecionados.size === 0}
+          className="btn-pptx-simples"
+        >
+          {loading ? 'Gerando PPTX...' : `Gerar PPTX Simples (${selecionados.size} canto(s))`}
+        </button>
       </div>
 
       {log.length > 0 && (
@@ -290,20 +333,32 @@ export default function Banco() {
       )}
 
       {modalAberto && (
-        <div className="modal-overlay">
-          <div className="modal-content">
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title"
+          onKeyDown={handleModalKeyDown}
+          onClick={cancelarModal}
+        >
+          <div
+            className="modal-content"
+            ref={modalRef}
+            tabIndex={-1}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <h3>Confirmar ação</h3>
+              <h3 id="modal-title">Confirmar ação</h3>
             </div>
             <div className="modal-body">
               <p>{mensagemModal}</p>
             </div>
             <div className="modal-footer">
-              <button onClick={cancelarModal} className="btn-modal-cancel">
+              <button onClick={cancelarModal} className="btn-modal-cancel" disabled={deletando}>
                 Cancelar
               </button>
-              <button onClick={confirmarModal} className="btn-modal-confirm">
-                Confirmar
+              <button onClick={confirmarModal} className="btn-modal-confirm" disabled={deletando}>
+                {deletando ? 'Aguarde...' : 'Confirmar'}
               </button>
             </div>
           </div>

@@ -426,3 +426,25 @@
 .btn-modal-confirm:hover {
   background-color: #b71c1c;
 }
+
+.btn-pptx-simples {
+  width: 100%;
+  padding: 10px;
+  background-color: #2980b9;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 12px;
+}
+
+.btn-pptx-simples:hover:not(:disabled) {
+  background-color: #1a5fa0;
+}
+
+.btn-pptx-simples:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}

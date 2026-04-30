@@ -1,17 +1,6 @@
-import { useState } from 'react';
-import { analisarDocx } from '../api';
+import { useState, useEffect } from 'react';
+import { analisarDocx, obterTitulosPadrao, montarTxt } from '../api';
 import './Conversor.css';
-
-const TITULOS_PADRAO = [
-  'CANTO DE ENTRADA',
-  'CANTO DO ATO PENITENCIAL',
-  'CANTO DO GLÓRIA',
-  'CANTO DE ACLAMAÇÃO',
-  'CANTO DO OFERTÓRIO',
-  'SANTO',
-  'CANTO DE COMUNHÃO',
-  'CANTO FINAL',
-];
 
 const CONFIDENCE_LABELS = {
   auto: 'Sequência',
@@ -27,20 +16,6 @@ function ConfidenceBadge({ confidence }) {
   );
 }
 
-function buildTxt(sections) {
-  const parts = [];
-  for (const section of sections) {
-    if (!section.title || section.title === '—') continue;
-    parts.push(`[${section.title}]`);
-    for (const line of section.lines) {
-      const s = line.trim();
-      if (s) parts.push(s);
-    }
-    parts.push('');
-  }
-  return parts.join('\n').trim();
-}
-
 function Conversor() {
   const [docxFile, setDocxFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -48,6 +23,13 @@ function Conversor() {
   const [log, setLog] = useState([]);
   const [sections, setSections] = useState(null);
   const [modoAvancado, setModoAvancado] = useState(false);
+  const [titulosPadrao, setTitulosPadrao] = useState([]);
+
+  useEffect(() => {
+    obterTitulosPadrao()
+      .then(setTitulosPadrao)
+      .catch(() => setTitulosPadrao([]));
+  }, []);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -88,18 +70,25 @@ function Conversor() {
     );
   };
 
-  const handleConfirmar = () => {
-    const txt = buildTxt(sections);
-    const blob = new Blob([txt], { type: 'text/plain; charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = docxFile.name.replace('.docx', '.txt');
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    setLog(prev => [...prev, '✓ Arquivo baixado!']);
+  const handleConfirmar = async () => {
+    setLoading(true);
+    try {
+      const txt = await montarTxt(sections);
+      const blob = new Blob([txt], { type: 'text/plain; charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = docxFile.name.replace('.docx', '.txt');
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setLog(prev => [...prev, '✓ Arquivo baixado!']);
+    } catch (err) {
+      setError('Erro ao baixar: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -161,7 +150,7 @@ function Conversor() {
                         onChange={(e) => handleTitleChange(idx, e.target.value)}
                         className="mapping-select"
                       >
-                        {TITULOS_PADRAO.map(t => (
+                        {titulosPadrao.map(t => (
                           <option key={t} value={t}>{t}</option>
                         ))}
                         <option value="—">— ignorar —</option>
@@ -184,7 +173,7 @@ function Conversor() {
               onClick={handleConfirmar}
               disabled={loading}
             >
-              Confirmar e Baixar TXT
+              {loading ? 'Baixando...' : 'Confirmar e Baixar TXT'}
             </button>
             <p className="preview-hint">
               ✓ Use este TXT na aba "Gerar via TXT"

@@ -27,7 +27,7 @@ KEYWORDS_MAP = {
         'penitencial', 'ato penitencial', 'canto penitencial'
     ],
     'CANTO DO GLÓRIA': [
-        'gloria', 'glória', 'louvor', 'hino de louvor'
+        'gloria', 'glória', 'hino de louvor'
     ],
     'CANTO DE ACLAMAÇÃO': [
         'aclamacao', 'aclamação', 'evangelho'
@@ -36,15 +36,18 @@ KEYWORDS_MAP = {
         'ofertorio', 'ofertório', 'ofertas', 'apresentacao das oferendas', 'apresentação das oferendas'
     ],
     'SANTO': [
-        'santo', 'hosana', 'santo santo', 'santo, santo, santo'
+        'hosana', 'santo santo', 'santo, santo, santo'
     ],
     'CANTO DE COMUNHÃO': [
-        'comunhao', 'comunhão', 'canto de comunhão', 'hino de comunhão'
+        'comunhao', 'comunhão', 'hino de comunhão'
     ],
     'CANTO FINAL': [
-        'final', 'saida', 'saída', 'envio', 'despedida', 'canto final'
+        'saida', 'saída', 'envio', 'despedida', 'canto final'
     ],
 }
+
+# Número mínimo de seções para aplicar mapeamento posicional automático
+_MIN_SECOES_AUTO = 6
 
 
 def _normalize(text):
@@ -75,7 +78,7 @@ def extract_text_from_docx(docx_path):
         runs = para.runs
         if runs:
             bold_count = sum(1 for run in runs if run.bold)
-            is_bold = bold_count > 0
+            is_bold = bold_count > len(runs) / 2
         else:
             is_bold = False
         lines.append(f'* {text}' if is_bold else text)
@@ -104,14 +107,14 @@ def extract_sections(lines):
 def _is_section_title(block):
     """
     Bloco de título: linha única, curta (<= 60 chars),
-    e que seja toda em maiúsculas OU contenha keyword conhecida.
+    e que seja toda em maiúsculas com ao menos uma letra, OU contenha keyword conhecida.
     """
     if len(block) != 1:
         return False
     line = block[0].lstrip('* ').strip()
     if not line or len(line) > 60:
         return False
-    if line.upper() == line and len(line) > 3:
+    if line.upper() == line and len(line) > 3 and any(c.isalpha() for c in line):
         return True
     if _match_keyword(_normalize(line)):
         return True
@@ -138,7 +141,6 @@ def auto_map_sections(blocks):
         next_pos = title_positions[idx + 1][0] if idx + 1 < len(title_positions) else len(blocks)
         content_blocks = blocks[pos + 1:next_pos]
 
-        # Concatena todos os blocos de conteúdo sem linhas em branco entre eles
         all_lines = []
         for cb in content_blocks:
             all_lines.extend(cb)
@@ -148,8 +150,8 @@ def auto_map_sections(blocks):
         else:
             sections.append({'title': raw_title, 'lines': all_lines, 'confidence': 'unknown'})
 
-    # Com exatamente 8 seções, mapeia as desconhecidas pela ordem litúrgica
-    if len(sections) == 8:
+    # Com 6 a 8 seções, mapeia as desconhecidas pela ordem litúrgica posicional
+    if _MIN_SECOES_AUTO <= len(sections) <= len(TITULOS_PADRAO):
         for i, s in enumerate(sections):
             if s['confidence'] == 'unknown':
                 s['title'] = TITULOS_PADRAO[i]

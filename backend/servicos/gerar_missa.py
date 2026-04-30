@@ -26,6 +26,7 @@ BOX_HEIGHT_CM = 19.05
 
 FONT_NAME = "Verdana"
 MAX_LINES_PER_SLIDE = 7
+FIXED_FONT_SIZE = 55  # Deixe None para automático, ou coloque um valor (ex: 55) para fixar
 HEADER_RE    = re.compile(r'^\[(.+)\]\s*$')
 BRACKET_RE   = re.compile(r'\[([^\]]+)\]')
 
@@ -217,10 +218,10 @@ def choose_font_size(text_lines, font_min=48, font_max=60):
     return font_min
 
 
-def create_song_slide(prs, block, bg_color, box_width_cm, box_height_cm, font_min=48, font_max=60):
+def create_song_slide(prs, block, bg_color, box_width_cm, box_height_cm, font_min=48, font_max=60, fixed_font_size=None):
     lines     = block['lines']
     is_bold   = block['bold']
-    font_size = choose_font_size(lines, font_min, font_max)
+    font_size = fixed_font_size if fixed_font_size else choose_font_size(lines, font_min, font_max)
 
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     
@@ -298,10 +299,14 @@ def gerar(txt_path, pptx_path, output_path, fonte_min=48, fonte_max=60, log=None
             blocos   = data['blocos']
             bg_color = get_bg_color(prs.slides[ph_idx])
             log('Inserindo ' + str(len(blocos)) + ' slide(s) para [' + data['titulo'] + ']')
+            slide_idx = 0
             for j, block in enumerate(blocos):
-                create_song_slide(prs, block, bg_color, box_width, box_height, fonte_min, fonte_max)
-                move_slide(prs, len(prs.slides) - 1, ph_idx + 1 + j)
-            total_inserted += len(blocos)
+                sub_blocos = auto_split_large(block, fonte_min)
+                for sub_block in sub_blocos:
+                    create_song_slide(prs, sub_block, bg_color, box_width, box_height, fonte_min, fonte_max, fixed_font_size=FIXED_FONT_SIZE)
+                    move_slide(prs, len(prs.slides) - 1, ph_idx + 1 + slide_idx)
+                    slide_idx += 1
+            total_inserted += slide_idx
 
         prs.save(output_path)
         msg = str(total_inserted) + ' slides inseridos. Total final: ' + str(len(prs.slides)) + ' slides.'
@@ -371,13 +376,61 @@ def gerar_do_banco(pptx_path, chaves, output_path, fonte_min=48, fonte_max=60, l
             blocos   = data['blocos']
             bg_color = get_bg_color(prs.slides[ph_idx])
             log('Inserindo ' + str(len(blocos)) + ' slide(s) para [' + data['titulo'] + ']')
+            slide_idx = 0
             for j, block in enumerate(blocos):
-                create_song_slide(prs, block, bg_color, box_width, box_height, fonte_min, fonte_max)
-                move_slide(prs, len(prs.slides) - 1, ph_idx + 1 + j)
-            total_inserted += len(blocos)
+                sub_blocos = auto_split_large(block, fonte_min)
+                for sub_block in sub_blocos:
+                    create_song_slide(prs, sub_block, bg_color, box_width, box_height, fonte_min, fonte_max, fixed_font_size=FIXED_FONT_SIZE)
+                    move_slide(prs, len(prs.slides) - 1, ph_idx + 1 + slide_idx)
+                    slide_idx += 1
+            total_inserted += slide_idx
 
         prs.save(output_path)
         msg = str(total_inserted) + ' slides inseridos. Total final: ' + str(len(prs.slides)) + ' slides.'
+        log(msg)
+        return True, msg
+
+    except Exception as e:
+        return False, 'Erro: ' + str(e)
+
+
+def gerar_pptx_cantos_simples(chaves, output_path, fonte_min=48, fonte_max=60, log=None):
+    """
+    Gera um PPTX simples contendo apenas os cantos selecionados do banco.
+    Sem ritual base - apenas os cantos.
+    chaves: lista de chaves de cantos (ex: ["CANTO DE ENTRADA — Eu venho"])
+    """
+    if log is None:
+        log = lambda msg: None
+
+    try:
+        from . import banco
+
+        log('Criando apresentação simples com cantos...')
+        prs = Presentation()
+        prs.slide_width = Cm(25.4)
+        prs.slide_height = Cm(19.05)
+
+        log('Total de cantos: ' + str(len(chaves)))
+
+        box_width = Cm(25.4)
+        box_height = Cm(19.05)
+        bg_color = BG_COLOR
+
+        total_slides = 0
+        for chave in chaves:
+            blocos = banco.carregar_blocos(chave)
+            if blocos:
+                titulo = chave.split(' — ')[0] if ' — ' in chave else chave
+                log('Adicionando ' + str(len(blocos)) + ' slide(s) para [' + titulo + ']')
+                for block in blocos:
+                    sub_blocos = auto_split_large(block, fonte_min)
+                    for sub_block in sub_blocos:
+                        create_song_slide(prs, sub_block, bg_color, box_width, box_height, fonte_min, fonte_max, fixed_font_size=FIXED_FONT_SIZE)
+                        total_slides += 1
+
+        prs.save(output_path)
+        msg = str(total_slides) + ' slide(s) gerado(s) com sucesso.'
         log(msg)
         return True, msg
 
