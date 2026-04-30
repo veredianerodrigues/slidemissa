@@ -58,3 +58,14 @@ export const converterDocx = async (docxFile) => {
 
   return response.data;
 };
+
+export const analisarDocx = async (docxFile) => {
+  const formData = new FormData();
+  formData.append('docx', docxFile);
+
+  const response = await axios.post(`${API_BASE}/analisar-docx`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+
+  return response.data;
+};

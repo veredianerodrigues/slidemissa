@@ -12,7 +12,7 @@
 }
 
 .conversor-card h2 {
-  color: #1a73e8;
+  color: #8f0517;
   margin: 0 0 8px 0;
   font-size: 24px;
 }
@@ -32,16 +32,16 @@
   position: relative;
   cursor: pointer;
   padding: 20px;
-  border: 2px dashed #1a73e8;
+  border: 2px dashed #8f0517;
   border-radius: 8px;
   text-align: center;
   transition: all 0.3s ease;
-  background: #f8f9ff;
+  background: #fff8f8;
 }
 
 .file-input-label:hover {
-  border-color: #1557b0;
-  background: #eef3ff;
+  border-color: #6e0410;
+  background: #fff0f0;
 }
 
 .file-input-label input {
@@ -50,7 +50,7 @@
 
 .file-input-text {
   display: block;
-  color: #1a73e8;
+  color: #8f0517;
   font-weight: 500;
   font-size: 16px;
 }
@@ -89,7 +89,7 @@
 .btn-converter {
   width: 100%;
   padding: 14px;
-  background: #1a73e8;
+  background: #8f0517;
   color: white;
   border: none;
   border-radius: 6px;
@@ -101,8 +101,8 @@
 }
 
 .btn-converter:hover:not(:disabled) {
-  background: #1557b0;
-  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.3);
+  background: #6e0410;
+  box-shadow: 0 2px 8px rgba(143, 5, 23, 0.3);
 }
 
 .btn-converter:disabled {
@@ -110,34 +110,153 @@
   cursor: not-allowed;
 }
 
-.preview-section {
+/* Mapping Section */
+.mapping-section {
   margin-top: 30px;
-  padding-top: 30px;
+  padding-top: 24px;
   border-top: 1px solid #eee;
 }
 
-.preview-section h3 {
+.mapping-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.mapping-header h3 {
   color: #333;
-  margin: 0 0 8px 0;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
 }
 
-.preview-info {
-  color: #666;
+.btn-modo-avancado {
+  background: none;
+  border: 1px solid #8f0517;
+  color: #8f0517;
+  padding: 6px 12px;
+  border-radius: 4px;
   font-size: 13px;
-  margin: 0 0 12px 0;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.preview-box {
-  width: 100%;
-  height: 300px;
-  padding: 12px;
+.btn-modo-avancado:hover {
+  background: #8f0517;
+  color: white;
+}
+
+.mapping-table {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.mapping-row {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  grid-auto-rows: auto auto;
+  gap: 4px 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f0;
+  align-items: start;
+}
+
+.mapping-row:last-child {
+  border-bottom: none;
+}
+
+.mapping-row:nth-child(even) {
+  background: #fafafa;
+}
+
+.mapping-row.confidence-row-auto {
+  border-left: 3px solid #27ae60;
+}
+
+.mapping-row.confidence-row-keyword {
+  border-left: 3px solid #2980b9;
+}
+
+.mapping-row.confidence-row-unknown {
+  border-left: 3px solid #e67e22;
+}
+
+.mapping-index {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  color: #999;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  align-self: center;
+}
+
+.mapping-title {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mapping-title-text {
+  font-weight: 600;
+  font-size: 14px;
+  color: #333;
+}
+
+.mapping-select {
+  flex: 1;
+  min-width: 200px;
+  padding: 4px 8px;
   border: 1px solid #ddd;
-  border-radius: 6px;
-  font-family: 'Courier New', monospace;
+  border-radius: 4px;
   font-size: 13px;
   color: #333;
-  background: #f9f9f9;
-  resize: vertical;
+  background: white;
+}
+
+.mapping-preview {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 12px;
+  color: #888;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-top: 2px;
+}
+
+/* Confidence badges */
+.confidence-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.confidence-auto {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.confidence-keyword {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.confidence-unknown {
+  background: #fff3e0;
+  color: #e65100;
 }
 
 .preview-hint {
@@ -145,4 +264,5 @@
   font-size: 13px;
   margin: 12px 0 0 0;
   font-weight: 500;
+  text-align: center;
 }

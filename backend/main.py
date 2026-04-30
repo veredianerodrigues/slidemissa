@@ -159,6 +159,37 @@ async def converter_docx_endpoint(docx: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Erro ao converter DOCX: {str(e)}")
 
 
+@app.post("/api/analisar-docx")
+async def analisar_docx_endpoint(docx: UploadFile = File(...)):
+    """
+    Analisa DOCX e retorna seções detectadas com títulos mapeados.
+    Retorna JSON com {sections: [{title, lines, confidence}]}.
+    """
+    docx_temp = None
+    try:
+        if not docx.filename.endswith('.docx'):
+            raise HTTPException(status_code=400, detail="Arquivo DOCX obrigatório")
+
+        with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as f:
+            docx_temp = f.name
+            f.write(await docx.read())
+
+        sections = converter_docx.analyze_docx(docx_temp)
+        return {"sections": sections}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao analisar DOCX: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao analisar DOCX: {str(e)}")
+    finally:
+        if docx_temp and os.path.exists(docx_temp):
+            try:
+                os.unlink(docx_temp)
+            except Exception:
+                pass
+
+
 # ============================================================================
 # Rotas: Banco de Cantos
 # ============================================================================
