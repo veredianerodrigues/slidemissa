@@ -75,7 +75,7 @@ def extract_text_from_docx(docx_path):
         runs = para.runs
         if runs:
             bold_count = sum(1 for run in runs if run.bold)
-            is_bold = bold_count > len(runs) / 2
+            is_bold = bold_count > 0
         else:
             is_bold = False
         lines.append(f'* {text}' if is_bold else text)
