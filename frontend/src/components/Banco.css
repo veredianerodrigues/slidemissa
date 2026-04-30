@@ -1,0 +1,256 @@
+/* Banco.css */
+
+.banco-container {
+  padding: 20px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.banco-header {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.banco-header h2 {
+  margin: 0 0 8px 0;
+  color: #8f0517;
+  font-size: 22px;
+}
+
+.banco-header p {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.filtro-section {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 20px;
+  background: #f5f5f5;
+  padding: 12px;
+  border-radius: 4px;
+}
+
+.filtro-section label {
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.filtro-section select {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.btn-refresh {
+  padding: 8px 16px;
+  background-color: #666;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.btn-refresh:hover {
+  background-color: #444;
+}
+
+.cantos-table {
+  margin-bottom: 20px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.table-header {
+  display: grid;
+  grid-template-columns: 40px 1fr 2fr 120px 80px;
+  gap: 8px;
+  padding: 12px;
+  background-color: #f5f5f5;
+  border-bottom: 2px solid #ddd;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.table-body {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.table-row {
+  display: grid;
+  grid-template-columns: 40px 1fr 2fr 120px 80px;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+  align-items: center;
+  font-size: 13px;
+}
+
+.table-row:hover {
+  background-color: #fafafa;
+}
+
+.col-check {
+  text-align: center;
+}
+
+.col-check input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.col-posicao,
+.col-canto,
+.col-data {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-acao {
+  text-align: center;
+}
+
+.btn-delete {
+  padding: 4px 8px;
+  background-color: #ff5555;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.btn-delete:hover {
+  background-color: #dd3333;
+}
+
+.no-data {
+  padding: 24px;
+  text-align: center;
+  color: #999;
+  font-size: 14px;
+}
+
+.gerar-banco-section {
+  background: #f5f5f5;
+  padding: 20px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: #333;
+  font-size: 13px;
+}
+
+.form-group input[type="file"],
+.form-group input[type="text"] {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.input-with-suffix {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.input-with-suffix input {
+  flex: 1;
+}
+
+.input-with-suffix span {
+  color: #666;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.file-name {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #666;
+  word-break: break-all;
+}
+
+.error-message {
+  background-color: #fee;
+  color: #c33;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 10px;
+  background-color: #8f0517;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #6e0410;
+}
+
+.btn-primary:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.log-container {
+  background: #f5f5f5;
+  padding: 12px;
+  border-radius: 4px;
+}
+
+.log-container h3 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.log-content {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  padding: 8px;
+  max-height: 150px;
+  overflow-y: auto;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+}
+
+.log-line {
+  margin-bottom: 4px;
+  color: #333;
+  line-height: 1.3;
+}
+
+.log-line:last-child {
+  margin-bottom: 0;
+}
