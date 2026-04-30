@@ -84,6 +84,23 @@ export default function Banco() {
     }
   };
 
+  const handleDeletarSelecionados = async () => {
+    if (selecionados.size === 0) return;
+    if (!window.confirm(`Deletar ${selecionados.size} canto(s) selecionado(s)?`)) return;
+
+    try {
+      setLog([`Deletando ${selecionados.size} canto(s)...`]);
+      for (const cantoId of selecionados) {
+        await call(deletarCanto, cantoId);
+      }
+      setLog([`✓ ${selecionados.size} canto(s) deletado(s)!`]);
+      await carregarDados();
+    } catch (err) {
+      setLog([`✗ Erro ao deletar cantos`]);
+      console.error('Erro ao deletar:', err);
+    }
+  };
+
   return (
     <div className="banco-container">
       <div className="banco-header">
@@ -169,13 +186,22 @@ export default function Banco() {
 
         {error && <div className="error-message">{error}</div>}
 
-        <button
-          onClick={handleGerar}
-          disabled={loading || selecionados.size === 0}
-          className="btn-primary"
-        >
-          {loading ? 'Gerando...' : `Gerar com ${selecionados.size} selecionado(s)`}
-        </button>
+        <div className="botoes-grupo">
+          <button
+            onClick={handleGerar}
+            disabled={loading || selecionados.size === 0}
+            className="btn-primary"
+          >
+            {loading ? 'Gerando...' : `Gerar com ${selecionados.size} selecionado(s)`}
+          </button>
+          <button
+            onClick={handleDeletarSelecionados}
+            disabled={loading || selecionados.size === 0}
+            className="btn-delete-mass"
+          >
+            {loading ? 'Deletando...' : `Deletar ${selecionados.size} selecionado(s)`}
+          </button>
+        </div>
       </div>
 
       {log.length > 0 && (

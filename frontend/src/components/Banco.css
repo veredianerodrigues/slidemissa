@@ -254,3 +254,35 @@
 .log-line:last-child {
   margin-bottom: 0;
 }
+
+.botoes-grupo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.botoes-grupo .btn-primary,
+.botoes-grupo .btn-delete-mass {
+  width: 100%;
+  margin: 0;
+}
+
+.btn-delete-mass {
+  padding: 10px;
+  background-color: #d32f2f;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-delete-mass:hover:not(:disabled) {
+  background-color: #b71c1c;
+}
+
+.btn-delete-mass:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
