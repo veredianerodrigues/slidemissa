@@ -30,7 +30,7 @@ KEYWORDS_MAP = {
         'gloria', 'glória', 'louvor', 'gloria a deus', 'hino de louvor'
     ],
     'CANTO DE ACLAMAÇÃO': [
-        'aleluia', 'aclamacao', 'aclamação', 'evangelho', 'aclame', 'gloria a vós senhor'
+        'aclamacao', 'aclamação', 'evangelho', 'aclame'
     ],
     'CANTO DO OFERTÓRIO': [
         'ofertorio', 'ofertório', 'ofertas', 'apresentacao das oferendas', 'apresentação das oferendas'
