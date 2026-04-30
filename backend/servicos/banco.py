@@ -79,9 +79,14 @@ def buscar_todos():
     inicializar()
     with _conectar() as con:
         rows = con.execute(
-            "SELECT id, posicao, nome, chave, criado_em FROM cantos ORDER BY posicao, nome"
+            "SELECT id, posicao, nome, chave, blocos, criado_em FROM cantos ORDER BY posicao, nome"
         ).fetchall()
-    return [dict(r) for r in rows]
+    result = []
+    for r in rows:
+        d = dict(r)
+        d['blocos'] = json.loads(d['blocos']) if d['blocos'] else []
+        result.append(d)
+    return result
 
 
 def buscar_por_posicao(posicao):
@@ -89,10 +94,15 @@ def buscar_por_posicao(posicao):
     inicializar()
     with _conectar() as con:
         rows = con.execute(
-            "SELECT id, posicao, nome, chave, criado_em FROM cantos WHERE posicao = ? ORDER BY nome",
+            "SELECT id, posicao, nome, chave, blocos, criado_em FROM cantos WHERE posicao = ? ORDER BY nome",
             (posicao,)
         ).fetchall()
-    return [dict(r) for r in rows]
+    result = []
+    for r in rows:
+        d = dict(r)
+        d['blocos'] = json.loads(d['blocos']) if d['blocos'] else []
+        result.append(d)
+    return result
 
 
 def buscar_posicoes():

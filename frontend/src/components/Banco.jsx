@@ -8,6 +8,7 @@ export default function Banco() {
   const [filtro, setFiltro] = useState('Todas');
   const [cantos, setCantos] = useState([]);
   const [selecionados, setSelecionados] = useState(new Set());
+  const [expandido, setExpandido] = useState(new Set());
   const [pptxFile, setPptxFile] = useState(null);
   const [nomeSaida, setNomeSaida] = useState('missa_pronta');
   const [log, setLog] = useState([]);
@@ -46,6 +47,16 @@ export default function Banco() {
       novo.add(chave);
     }
     setSelecionados(novo);
+  };
+
+  const toggleExpandido = (cantoId) => {
+    const novo = new Set(expandido);
+    if (novo.has(cantoId)) {
+      novo.delete(cantoId);
+    } else {
+      novo.add(cantoId);
+    }
+    setExpandido(novo);
   };
 
   const handleGerar = async (e) => {
@@ -134,25 +145,50 @@ export default function Banco() {
             <div className="no-data">Nenhum canto encontrado</div>
           ) : (
             cantos.map(canto => (
-              <div key={canto.chave} className="table-row">
-                <div className="col-check">
-                  <input
-                    type="checkbox"
-                    checked={selecionados.has(canto.chave)}
-                    onChange={() => toggleSelecao(canto.chave)}
-                  />
+              <div key={canto.chave} className="table-row-wrapper">
+                <div className="table-row">
+                  <div className="col-check">
+                    <input
+                      type="checkbox"
+                      checked={selecionados.has(canto.chave)}
+                      onChange={() => toggleSelecao(canto.chave)}
+                    />
+                  </div>
+                  <div className="col-posicao">{canto.posicao}</div>
+                  <div className="col-canto">{canto.nome}</div>
+                  <div className="col-data">{canto.criado_em}</div>
+                  <div className="col-acao">
+                    <button
+                      className="btn-preview"
+                      onClick={() => toggleExpandido(canto.id)}
+                      title={expandido.has(canto.id) ? 'Fechar' : 'Ver prévia'}
+                    >
+                      {expandido.has(canto.id) ? '▼' : '▶'}
+                    </button>
+                    <button
+                      className="btn-delete"
+                      onClick={() => handleDeletar(canto.id)}
+                    >
+                      Deletar
+                    </button>
+                  </div>
                 </div>
-                <div className="col-posicao">{canto.posicao}</div>
-                <div className="col-canto">{canto.nome}</div>
-                <div className="col-data">{canto.criado_em}</div>
-                <div className="col-acao">
-                  <button
-                    className="btn-delete"
-                    onClick={() => handleDeletar(canto.id)}
-                  >
-                    Deletar
-                  </button>
-                </div>
+                {expandido.has(canto.id) && (
+                  <div className="preview-content">
+                    {canto.blocos && canto.blocos.length > 0 ? (
+                      <div className="preview-blocos">
+                        {canto.blocos.slice(0, 3).map((bloco, idx) => (
+                          <div key={idx} className="preview-bloco">
+                            {Array.isArray(bloco.lines) ? bloco.lines.slice(0, 2).join(' · ') : bloco}
+                          </div>
+                        ))}
+                        {canto.blocos.length > 3 && <div className="preview-more">... +{canto.blocos.length - 3} mais</div>}
+                      </div>
+                    ) : (
+                      <div className="preview-empty">Sem conteúdo</div>
+                    )}
+                  </div>
+                )}
               </div>
             ))
           )}
