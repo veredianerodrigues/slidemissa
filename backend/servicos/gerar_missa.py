@@ -136,9 +136,11 @@ def split_block(block_lines):
     return [{'lines': [l['text'] for l in block_lines], 'bold': bold_majority}]
 
 
-def estimate_lines_needed(text_lines, font_size_pt):
+def estimate_lines_needed(text_lines, font_size_pt, bold=False):
     box_width_emu  = BOX_WIDTH_CM * 360000
-    avg_char_w_emu = font_size_pt * 0.53 * 12700
+    # Fatores calibrados para Verdana: bold ocupa ~8% mais que regular
+    char_width_factor = 0.65 if bold else 0.60
+    avg_char_w_emu = font_size_pt * char_width_factor * 12700
     chars_per_line = box_width_emu / avg_char_w_emu
     return sum(max(1, math.ceil(len(ln) / chars_per_line)) for ln in text_lines)
 
@@ -156,17 +158,25 @@ def auto_split_large(block, font_min):
     if n == 0:
         return []
 
-    # Dentro do máximo e cabe visualmente: um slide só
-    if n <= MAX_LINES_PER_SLIDE:
-        if estimate_lines_needed(lines, font_min) <= estimate_max_lines(font_min):
-            return [block]
-        # Estouro visual mas não há linhas suficientes para dividir
-        # respeitando o mínimo nos dois lados: mantém inteiro
-        if n < MIN_LINES_PER_SLIDE * 2:
-            return [block]
+    # Linha única não pode ser dividida
+    if n == 1:
+        return [block]
 
-    # Precisa dividir: ponto central equilibrado entre MIN e MAX
-    mid = max(MIN_LINES_PER_SLIDE, min(MAX_LINES_PER_SLIDE, math.ceil(n / 2)))
+    # Usa o tamanho real de renderização para estimar (não o mínimo teórico)
+    font_est = FIXED_FONT_SIZE if FIXED_FONT_SIZE else font_min
+    is_bold = block.get('bold', False)
+
+    # Cabe no máximo de linhas E linhas visuais dentro do limite: um slide só
+    if n <= MAX_LINES_PER_SLIDE and estimate_lines_needed(lines, font_est, bold=is_bold) <= MAX_LINES_PER_SLIDE:
+        return [block]
+
+    # Precisa dividir: ponto central equilibrado entre MIN e MAX quando possível,
+    # ou ponto natural (ceil n/2) quando o bloco é pequeno demais para respeitar MIN
+    if n >= MIN_LINES_PER_SLIDE * 2:
+        mid = max(MIN_LINES_PER_SLIDE, min(MAX_LINES_PER_SLIDE, math.ceil(n / 2)))
+    else:
+        mid = math.ceil(n / 2)
+
     left  = {'lines': lines[:mid], 'bold': block['bold']}
     right = {'lines': lines[mid:], 'bold': block['bold']}
     return auto_split_large(left, font_min) + auto_split_large(right, font_min)
