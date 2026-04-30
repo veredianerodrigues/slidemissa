@@ -12,6 +12,9 @@ export default function Banco() {
   const [pptxFile, setPptxFile] = useState(null);
   const [nomeSaida, setNomeSaida] = useState('missa_pronta');
   const [log, setLog] = useState([]);
+  const [modalAberto, setModalAberto] = useState(false);
+  const [mensagemModal, setMensagemModal] = useState('');
+  const [acaoModal, setAcaoModal] = useState(null);
   const { call, loading, error, setError } = useApi();
 
   useEffect(() => {
@@ -21,10 +24,12 @@ export default function Banco() {
   const carregarDados = async () => {
     try {
       const pos = await call(obterPosicoes);
-      setPosicoes(pos);
-      await filtrarCantos('Todas');
+      setPosicoes(pos || []);
+      await filtrarCantos(filtro || 'Todas');
     } catch (err) {
       console.error('Erro ao carregar:', err);
+      setPosicoes([]);
+      setCantos([]);
     }
   };
 
@@ -33,18 +38,19 @@ export default function Banco() {
     setSelecionados(new Set());
     try {
       const lista = await call(listarCantos, posicao);
-      setCantos(lista);
+      setCantos(lista || []);
     } catch (err) {
       console.error('Erro ao filtrar:', err);
+      setCantos([]);
     }
   };
 
-  const toggleSelecao = (chave) => {
+  const toggleSelecao = (cantoId) => {
     const novo = new Set(selecionados);
-    if (novo.has(chave)) {
-      novo.delete(chave);
+    if (novo.has(cantoId)) {
+      novo.delete(cantoId);
     } else {
-      novo.add(chave);
+      novo.add(cantoId);
     }
     setSelecionados(novo);
   };
@@ -75,9 +81,12 @@ export default function Banco() {
 
     try {
       setLog(prev => [...prev, `Gerando com ${selecionados.size} canto(s)...`]);
-      const blob = await call(gerarDoBanco, pptxFile, Array.from(selecionados), nomeSaida);
+      const chavesSelecionadas = Array.from(selecionados)
+        .map(id => cantos.find(c => c.id === parseInt(id, 10))?.chave)
+        .filter(chave => chave);
+      const blob = await call(gerarDoBanco, pptxFile, chavesSelecionadas, nomeSaida);
       setLog(prev => [...prev, '✓ Apresentação gerada com sucesso!']);
-      
+
       const filename = nomeSaida.endsWith('.pptx') ? nomeSaida : nomeSaida + '.pptx';
       downloadFile(blob, filename);
     } catch (err) {
@@ -85,31 +94,60 @@ export default function Banco() {
     }
   };
 
-  const handleDeletar = async (cantoId) => {
-    if (!window.confirm('Deletar este canto?')) return;
-    try {
-      await call(deletarCanto, cantoId);
-      await carregarDados();
-    } catch (err) {
-      console.error('Erro ao deletar:', err);
+  const handleDeletar = (cantoId) => {
+    setMensagemModal('Tem certeza que deseja deletar este canto?');
+    setAcaoModal(async () => {
+      try {
+        const id = parseInt(cantoId, 10);
+        console.log('Deletando canto ID:', id, 'tipo:', typeof id);
+        await call(deletarCanto, id);
+        setModalAberto(false);
+        await carregarDados();
+      } catch (err) {
+        console.error('Erro ao deletar:', err);
+        const mensagemErro = err.response?.data?.detail || 'Erro ao deletar canto';
+        setError(mensagemErro);
+        setModalAberto(false);
+      }
+    });
+    setModalAberto(true);
+  };
+
+  const handleDeletarSelecionados = () => {
+    if (selecionados.size === 0) return;
+    setMensagemModal(`Deletar ${selecionados.size} canto(s) selecionado(s)?`);
+    setAcaoModal(async () => {
+      try {
+        setLog([`Deletando ${selecionados.size} canto(s)...`]);
+        for (const cantoId of selecionados) {
+          const id = parseInt(cantoId, 10);
+          console.log('Deletando canto ID:', id, 'tipo:', typeof id);
+          await call(deletarCanto, id);
+        }
+        setLog([`✓ ${selecionados.size} canto(s) deletado(s)!`]);
+        setModalAberto(false);
+        setSelecionados(new Set());
+        await carregarDados();
+      } catch (err) {
+        console.error('Erro ao deletar:', err);
+        const mensagemErro = err.response?.data?.detail || 'Erro ao deletar cantos';
+        setLog([`✗ ${mensagemErro}`]);
+        setModalAberto(false);
+      }
+    });
+    setModalAberto(true);
+  };
+
+  const confirmarModal = async () => {
+    if (acaoModal) {
+      await acaoModal();
     }
   };
 
-  const handleDeletarSelecionados = async () => {
-    if (selecionados.size === 0) return;
-    if (!window.confirm(`Deletar ${selecionados.size} canto(s) selecionado(s)?`)) return;
-
-    try {
-      setLog([`Deletando ${selecionados.size} canto(s)...`]);
-      for (const cantoId of selecionados) {
-        await call(deletarCanto, cantoId);
-      }
-      setLog([`✓ ${selecionados.size} canto(s) deletado(s)!`]);
-      await carregarDados();
-    } catch (err) {
-      setLog([`✗ Erro ao deletar cantos`]);
-      console.error('Erro ao deletar:', err);
-    }
+  const cancelarModal = () => {
+    setModalAberto(false);
+    setAcaoModal(null);
+    setMensagemModal('');
   };
 
   return (
@@ -150,8 +188,8 @@ export default function Banco() {
                   <div className="col-check">
                     <input
                       type="checkbox"
-                      checked={selecionados.has(canto.chave)}
-                      onChange={() => toggleSelecao(canto.chave)}
+                      checked={selecionados.has(canto.id)}
+                      onChange={() => toggleSelecao(canto.id)}
                     />
                   </div>
                   <div className="col-posicao">{canto.posicao}</div>
@@ -247,6 +285,27 @@ export default function Banco() {
             {log.map((msg, idx) => (
               <div key={idx} className="log-line">{msg}</div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {modalAberto && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h3>Confirmar ação</h3>
+            </div>
+            <div className="modal-body">
+              <p>{mensagemModal}</p>
+            </div>
+            <div className="modal-footer">
+              <button onClick={cancelarModal} className="btn-modal-cancel">
+                Cancelar
+              </button>
+              <button onClick={confirmarModal} className="btn-modal-confirm">
+                Confirmar
+              </button>
+            </div>
           </div>
         </div>
       )}

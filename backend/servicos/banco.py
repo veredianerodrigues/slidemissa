@@ -146,3 +146,10 @@ def buscar_por_id(canto_id):
         d['blocos'] = json.loads(d['blocos'])
         return d
     return None
+
+
+def limpar_todos():
+    """Remove todos os cantos do banco."""
+    inicializar()
+    with _conectar() as con:
+        con.execute("DELETE FROM cantos")

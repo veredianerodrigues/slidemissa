@@ -290,6 +290,17 @@ async def deletar_canto(canto_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.delete("/api/banco")
+async def limpar_banco():
+    """Remove todos os cantos do banco."""
+    try:
+        banco.limpar_todos()
+        return {"message": "Banco de cantos limpo com sucesso"}
+    except Exception as e:
+        logger.error(f"Erro ao limpar banco: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/health")
 async def health():
     """Health check."""

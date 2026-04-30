@@ -24,22 +24,22 @@ KEYWORDS_MAP = {
         'entrada', 'inicio', 'início', 'abertura', 'procissao', 'procissão', 'canto inicial'
     ],
     'CANTO DO ATO PENITENCIAL': [
-        'penitencial', 'ato penitencial', 'kyrie', 'senhor tende piedade', 'piedade de nós'
+        'penitencial', 'ato penitencial', 'canto penitencial'
     ],
     'CANTO DO GLÓRIA': [
-        'gloria', 'glória', 'louvor', 'gloria a deus', 'hino de louvor'
+        'gloria', 'glória', 'louvor', 'hino de louvor'
     ],
     'CANTO DE ACLAMAÇÃO': [
-        'aclamacao', 'aclamação', 'evangelho', 'aclame'
+        'aclamacao', 'aclamação', 'evangelho'
     ],
     'CANTO DO OFERTÓRIO': [
         'ofertorio', 'ofertório', 'ofertas', 'apresentacao das oferendas', 'apresentação das oferendas'
     ],
     'SANTO': [
-        'santo', 'hosana', 'santo senhor deus do universo'
+        'santo', 'hosana', 'santo santo', 'santo, santo, santo'
     ],
     'CANTO DE COMUNHÃO': [
-        'comunhao', 'comunhão', 'pao da vida', 'pão da vida', 'eucaristia', 'mesa do senhor'
+        'comunhao', 'comunhão', 'canto de comunhão', 'hino de comunhão'
     ],
     'CANTO FINAL': [
         'final', 'saida', 'saída', 'envio', 'despedida', 'canto final'
