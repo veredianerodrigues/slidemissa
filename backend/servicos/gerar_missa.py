@@ -161,15 +161,13 @@ def auto_split_large(block, font_min):
     if n == 1:
         return [block]
 
-    # Usa o tamanho real de renderização para estimar (não o mínimo teórico)
     font_est = FIXED_FONT_SIZE if FIXED_FONT_SIZE else font_min
     is_bold = block.get('bold', False)
 
-    # Cabe no máximo de linhas E linhas visuais dentro do limite: um slide só
     if n <= MAX_LINES_PER_SLIDE and estimate_lines_needed(lines, font_est, bold=is_bold) <= MAX_LINES_PER_SLIDE:
         return [block]
 
-    mid = min(MAX_LINES_PER_SLIDE, math.ceil(n / 2))
+    mid = math.ceil(n / 2)
 
     left  = {'lines': lines[:mid], 'bold': block['bold']}
     right = {'lines': lines[mid:], 'bold': block['bold']}
