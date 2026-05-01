@@ -25,8 +25,7 @@ BOX_WIDTH_CM  = 25.4
 BOX_HEIGHT_CM = 19.05
 
 FONT_NAME = "Verdana"
-MAX_LINES_PER_SLIDE = 6
-MIN_LINES_PER_SLIDE = 4
+MAX_LINES_PER_SLIDE = 8
 FIXED_FONT_SIZE = 55  # Deixe None para automático, ou coloque um valor (ex: 55) para fixar
 HEADER_RE    = re.compile(r'^\[(.+)\]\s*$')
 BRACKET_RE   = re.compile(r'\[([^\]]+)\]')
@@ -170,12 +169,7 @@ def auto_split_large(block, font_min):
     if n <= MAX_LINES_PER_SLIDE and estimate_lines_needed(lines, font_est, bold=is_bold) <= MAX_LINES_PER_SLIDE:
         return [block]
 
-    # Precisa dividir: ponto central equilibrado entre MIN e MAX quando possível,
-    # ou ponto natural (ceil n/2) quando o bloco é pequeno demais para respeitar MIN
-    if n >= MIN_LINES_PER_SLIDE * 2:
-        mid = max(MIN_LINES_PER_SLIDE, min(MAX_LINES_PER_SLIDE, math.ceil(n / 2)))
-    else:
-        mid = math.ceil(n / 2)
+    mid = min(MAX_LINES_PER_SLIDE, math.ceil(n / 2))
 
     left  = {'lines': lines[:mid], 'bold': block['bold']}
     right = {'lines': lines[mid:], 'bold': block['bold']}

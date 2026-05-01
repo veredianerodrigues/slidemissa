@@ -4,6 +4,7 @@
 converter_docx.py - Converte DOCX para TXT no formato esperado
 """
 
+import re
 import unicodedata
 from docx import Document
 
@@ -42,12 +43,16 @@ KEYWORDS_MAP = {
         'comunhao', 'comunhão', 'hino de comunhão'
     ],
     'CANTO FINAL': [
-        'saida', 'saída', 'envio', 'despedida', 'canto final'
+        'final', 'saida', 'saída', 'envio', 'despedida', 'canto final'
     ],
 }
 
 # Número mínimo de seções para aplicar mapeamento posicional automático
 _MIN_SECOES_AUTO = 6
+
+# Máximo de caracteres por linha no TXT gerado — linhas mais longas são
+# quebradas na pontuação natural (vírgula, ponto, etc.)
+MAX_TXT_LINE_LENGTH = 60
 
 
 def _normalize(text):
@@ -67,21 +72,39 @@ def _match_keyword(text_norm):
 
 
 def extract_text_from_docx(docx_path):
-    """Extrai texto do DOCX preservando formatação (negrito)."""
+    """
+    Extrai texto do DOCX preservando negrito e quebras de linha suaves (<w:br/>).
+    Cada parágrafo DOCX é separado por linha em branco, pois é uma unidade natural
+    (verso, refrão ou título) — independente de o DOCX ter parágrafos em branco ou não.
+    """
     doc = Document(docx_path)
     lines = []
     for para in doc.paragraphs:
-        text = para.text.strip()
-        if not text:
+        full_text = para.text  # \n presente quando o parágrafo contém soft returns
+        if not full_text.strip():
             lines.append('')
             continue
+
         runs = para.runs
         if runs:
             bold_count = sum(1 for run in runs if run.bold)
             is_bold = bold_count > len(runs) / 2
         else:
             is_bold = False
-        lines.append(f'* {text}' if is_bold else text)
+
+        # Divide nos soft returns preservando as quebras naturais do DOCX
+        sub_lines = full_text.split('\n')
+        for sub in sub_lines:
+            text = sub.strip()
+            if text:
+                lines.append(f'* {text}' if is_bold else text)
+            else:
+                lines.append('')
+
+        # Garante separação entre parágrafos para que extract_sections
+        # trate cada parágrafo como bloco independente
+        lines.append('')
+
     return lines
 
 
@@ -114,9 +137,10 @@ def _is_section_title(block):
     line = block[0].lstrip('* ').strip()
     if not line or len(line) > 60:
         return False
-    if line.upper() == line and len(line) > 3 and any(c.isalpha() for c in line):
+    if line.upper() == line and len(line) > 4 and any(c.isalpha() for c in line):
         return True
-    if _match_keyword(_normalize(line)):
+    # Títulos de seção não têm pontuação — rejeita letras de músicas
+    if not any(c in line for c in '.!?,') and _match_keyword(_normalize(line)):
         return True
     return False
 
@@ -167,10 +191,39 @@ def analyze_docx(docx_path):
     return auto_map_sections(blocks)
 
 
+def _quebrar_linha(text, bold):
+    """
+    Quebra texto longo em segmentos curtos usando pontuação como ponto de corte.
+    Retorna lista de linhas com prefixo '* ' se bold=True.
+    """
+    prefix = '* ' if bold else ''
+    if len(text) <= MAX_TXT_LINE_LENGTH:
+        return [prefix + text]
+
+    # Divide na pontuação (ponto, vírgula, exclamação, interrogação) + espaço
+    segments = re.split(r'(?<=[.,!?])\s+', text)
+
+    result = []
+    current = ''
+    for seg in segments:
+        candidate = (current + ' ' + seg).strip() if current else seg
+        if len(candidate) <= MAX_TXT_LINE_LENGTH or not current:
+            current = candidate
+        else:
+            result.append(prefix + current)
+            current = seg
+    if current:
+        result.append(prefix + current)
+
+    return result if result else [prefix + text]
+
+
 def montar_txt(sections):
     """
-    Monta TXT: cabeçalho [TÍTULO] + linhas corridas por seção.
-    Seções separadas por linha em branco.
+    Monta TXT: cabeçalho [TÍTULO] + linhas por seção.
+    Regras aplicadas:
+    - Linhas longas são quebradas na pontuação natural.
+    - Linha em branco é inserida ao alternar entre verso (normal) e refrão (negrito).
     """
     parts = []
     for section in sections:
@@ -179,10 +232,23 @@ def montar_txt(sections):
         if not title or title == '—':
             continue
         parts.append(f'[{title}]')
+
+        prev_bold = None
         for line in lines:
             stripped = line.strip()
-            if stripped:
-                parts.append(stripped)
+            if not stripped:
+                continue
+            is_bold = stripped.startswith('* ')
+            text = stripped[2:] if is_bold else stripped
+
+            # Regra 2: linha em branco ao alternar verso ↔ refrão
+            if prev_bold is not None and is_bold != prev_bold:
+                parts.append('')
+
+            # Regra 1: quebrar linhas longas na pontuação
+            parts.extend(_quebrar_linha(text, is_bold))
+            prev_bold = is_bold
+
         parts.append('')
     return '\n'.join(parts).strip()
 
