@@ -4,7 +4,6 @@
 converter_docx.py - Converte DOCX para TXT no formato esperado
 """
 
-import re
 import unicodedata
 from docx import Document
 
@@ -49,10 +48,6 @@ KEYWORDS_MAP = {
 
 # Número mínimo de seções para aplicar mapeamento posicional automático
 _MIN_SECOES_AUTO = 6
-
-# Máximo de caracteres por linha no TXT gerado — linhas mais longas são
-# quebradas na pontuação natural (vírgula, ponto, etc.)
-MAX_TXT_LINE_LENGTH = 60
 
 
 def _normalize(text):
@@ -191,39 +186,12 @@ def analyze_docx(docx_path):
     return auto_map_sections(blocks)
 
 
-def _quebrar_linha(text, bold):
-    """
-    Quebra texto longo em segmentos curtos usando pontuação como ponto de corte.
-    Retorna lista de linhas com prefixo '* ' se bold=True.
-    """
-    prefix = '* ' if bold else ''
-    if len(text) <= MAX_TXT_LINE_LENGTH:
-        return [prefix + text]
-
-    # Divide na pontuação (ponto, vírgula, exclamação, interrogação) + espaço
-    segments = re.split(r'(?<=[.,!?])\s+', text)
-
-    result = []
-    current = ''
-    for seg in segments:
-        candidate = (current + ' ' + seg).strip() if current else seg
-        if len(candidate) <= MAX_TXT_LINE_LENGTH or not current:
-            current = candidate
-        else:
-            result.append(prefix + current)
-            current = seg
-    if current:
-        result.append(prefix + current)
-
-    return result if result else [prefix + text]
-
 
 def montar_txt(sections):
     """
     Monta TXT: cabeçalho [TÍTULO] + linhas por seção.
-    Regras aplicadas:
-    - Linhas longas são quebradas na pontuação natural.
-    - Linha em branco é inserida ao alternar entre verso (normal) e refrão (negrito).
+    Quebras de linha do DOCX (soft returns) são preservadas.
+    Linha em branco é inserida ao alternar entre verso (normal) e refrão (negrito).
     """
     parts = []
     for section in sections:
@@ -241,12 +209,10 @@ def montar_txt(sections):
             is_bold = stripped.startswith('* ')
             text = stripped[2:] if is_bold else stripped
 
-            # Regra 2: linha em branco ao alternar verso ↔ refrão
             if prev_bold is not None and is_bold != prev_bold:
                 parts.append('')
 
-            # Regra 1: quebrar linhas longas na pontuação
-            parts.extend(_quebrar_linha(text, is_bold))
+            parts.append(('* ' if is_bold else '') + text)
             prev_bold = is_bold
 
         parts.append('')
