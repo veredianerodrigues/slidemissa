@@ -14,7 +14,7 @@ function App() {
       </main>
 
       <footer className="app-footer">
-        <p>Slide Missa © 2024 — Versão Web</p>
+        <p>Slide Missa © 2026 — Verediane</p>
       </footer>
     </div>
   );
