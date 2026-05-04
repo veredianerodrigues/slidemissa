@@ -160,9 +160,6 @@ def parse_docx(docx_path, log=None):
             text = sub.strip()
             if text:
                 raw_lines.append(f'* {text}' if is_bold else text)
-            else:
-                raw_lines.append('')
-        raw_lines.append('')
 
     # Agrupa em blocos separados por linhas em branco
     blocks = []
