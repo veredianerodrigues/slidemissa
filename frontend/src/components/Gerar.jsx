@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { gerarApresentacao } from '../api';
+import { gerarApresentacao, validarDocx } from '../api';
 import { useApi, downloadFile } from '../hooks/useApi';
 import './Gerar.css';
 
@@ -7,34 +7,51 @@ export default function Gerar() {
   const [docxFile, setDocxFile] = useState(null);
   const [pptxFile, setPptxFile] = useState(null);
   const [nomeSaida, setNomeSaida] = useState('missa_pronta');
+  const [validacao, setValidacao] = useState(null);
+  const [validando, setValidando] = useState(false);
   const [log, setLog] = useState([]);
   const { call, loading, error, setError } = useApi();
+
+  const handleDocxChange = async (e) => {
+    const file = e.target.files[0];
+    setDocxFile(file);
+    setValidacao(null);
+    setError(null);
+    if (!file) return;
+
+    setValidando(true);
+    try {
+      const resultado = await validarDocx(file);
+      setValidacao(resultado);
+    } catch {
+      setValidacao({ valido: false, erros: ['Não foi possível validar o arquivo.'], avisos: [], secoes: [] });
+    } finally {
+      setValidando(false);
+    }
+  };
 
   const handleGerar = async (e) => {
     e.preventDefault();
     setLog([]);
     setError(null);
 
-    if (!docxFile) {
-      setError('Selecione um arquivo .docx');
-      return;
-    }
-    if (!pptxFile) {
-      setError('Selecione um arquivo .pptx');
-      return;
-    }
+    if (!docxFile) { setError('Selecione um arquivo .docx'); return; }
+    if (!pptxFile) { setError('Selecione um arquivo .pptx'); return; }
+    if (validacao && !validacao.valido) { setError('Corrija os erros no arquivo antes de gerar.'); return; }
 
     try {
       setLog(prev => [...prev, 'Enviando arquivos...']);
       const blob = await call(gerarApresentacao, docxFile, pptxFile, nomeSaida);
       setLog(prev => [...prev, '✓ Apresentação gerada com sucesso!']);
-
       const filename = nomeSaida.endsWith('.pptx') ? nomeSaida : nomeSaida + '.pptx';
       downloadFile(blob, filename);
     } catch (err) {
       setLog(prev => [...prev, '✗ Erro ao gerar: ' + (error || err.message)]);
     }
   };
+
+  const temErros = validacao && validacao.erros.length > 0;
+  const temAvisos = validacao && validacao.avisos.length > 0;
 
   return (
     <div className="gerar-container">
@@ -49,11 +66,44 @@ export default function Gerar() {
           <input
             type="file"
             accept=".docx"
-            onChange={(e) => setDocxFile(e.target.files[0])}
+            onChange={handleDocxChange}
             disabled={loading}
           />
           {docxFile && <span className="file-name">{docxFile.name}</span>}
         </div>
+
+        {validando && <div className="validacao-loading">Verificando arquivo...</div>}
+
+        {validacao && (
+          <div className={`validacao-panel ${temErros ? 'tem-erros' : temAvisos ? 'tem-avisos' : 'ok'}`}>
+            <div className="validacao-titulo">
+              {temErros ? '❌ Arquivo com problemas' : temAvisos ? '⚠️ Arquivo válido com avisos' : '✓ Arquivo válido'}
+            </div>
+
+            {validacao.erros.map((e, i) => (
+              <div key={i} className="validacao-item erro">❌ {e}</div>
+            ))}
+            {validacao.avisos.map((a, i) => (
+              <div key={i} className="validacao-item aviso">⚠️ {a}</div>
+            ))}
+
+            {validacao.secoes.length > 0 && (
+              <div className="validacao-secoes">
+                <div className="validacao-secoes-titulo">
+                  Seções encontradas ({validacao.secoes.length})
+                </div>
+                {validacao.secoes.map((s, i) => (
+                  <div key={i} className={`secao-item ${s.tem_negrito ? 'ok' : 'sem-negrito'}`}>
+                    <span className="secao-nome">{s.titulo}</span>
+                    <span className="secao-info">
+                      {s.tem_negrito ? '✓ refrão' : '⚠ sem negrito'} · {s.total_linhas} linhas
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="form-group">
           <label>Ritual (.pptx)</label>
@@ -81,7 +131,7 @@ export default function Gerar() {
 
         {error && <div className="error-message">{error}</div>}
 
-        <button type="submit" disabled={loading} className="btn-primary">
+        <button type="submit" disabled={loading || temErros} className="btn-primary">
           {loading ? 'Gerando...' : 'Gerar Apresentação'}
         </button>
       </form>
