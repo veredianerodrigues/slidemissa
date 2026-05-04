@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 banco.py - Banco de cantos (SQLite)
-(Migrado do desktop para web)
 """
 
 import os
@@ -47,6 +46,13 @@ def _primeiras_palavras(blocos, n=5):
     return "sem titulo"
 
 
+def _deserializar_canto(row):
+    """Converte uma row do SQLite em dict, desserializando blocos de JSON."""
+    d = dict(row)
+    d['blocos'] = json.loads(d['blocos']) if d['blocos'] else []
+    return d
+
+
 def salvar_canto(posicao, blocos):
     """Salva ou atualiza um canto no banco."""
     inicializar()
@@ -79,9 +85,9 @@ def buscar_todos():
     inicializar()
     with _conectar() as con:
         rows = con.execute(
-            "SELECT id, posicao, nome, chave, criado_em FROM cantos ORDER BY posicao, nome"
+            "SELECT id, posicao, nome, chave, blocos, criado_em FROM cantos ORDER BY posicao, nome"
         ).fetchall()
-    return [dict(r) for r in rows]
+    return [_deserializar_canto(r) for r in rows]
 
 
 def buscar_por_posicao(posicao):
@@ -89,10 +95,10 @@ def buscar_por_posicao(posicao):
     inicializar()
     with _conectar() as con:
         rows = con.execute(
-            "SELECT id, posicao, nome, chave, criado_em FROM cantos WHERE posicao = ? ORDER BY nome",
+            "SELECT id, posicao, nome, chave, blocos, criado_em FROM cantos WHERE posicao = ? ORDER BY nome",
             (posicao,)
         ).fetchall()
-    return [dict(r) for r in rows]
+    return [_deserializar_canto(r) for r in rows]
 
 
 def buscar_posicoes():
@@ -124,6 +130,17 @@ def deletar(canto_id):
         con.execute("DELETE FROM cantos WHERE id = ?", (canto_id,))
 
 
+def deletar_varios(ids):
+    """Remove múltiplos cantos pelos IDs. Retorna o número de cantos deletados."""
+    if not ids:
+        return 0
+    inicializar()
+    placeholders = ','.join('?' for _ in ids)
+    with _conectar() as con:
+        cur = con.execute(f"DELETE FROM cantos WHERE id IN ({placeholders})", ids)
+        return cur.rowcount
+
+
 def buscar_por_id(canto_id):
     """Retorna um canto pelo ID."""
     inicializar()
@@ -132,7 +149,13 @@ def buscar_por_id(canto_id):
             "SELECT * FROM cantos WHERE id = ?", (canto_id,)
         ).fetchone()
     if row:
-        d = dict(row)
-        d['blocos'] = json.loads(d['blocos'])
-        return d
+        return _deserializar_canto(row)
     return None
+
+
+def limpar_todos():
+    """Remove todos os cantos do banco."""
+    inicializar()
+    with _conectar() as con:
+        cur = con.execute("DELETE FROM cantos")
+        return cur.rowcount
