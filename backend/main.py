@@ -31,6 +31,33 @@ app.add_middleware(
 )
 
 
+@app.post("/api/validar")
+async def validar_docx_endpoint(docx: UploadFile = File(...)):
+    docx_temp = None
+    try:
+        if not docx.filename.endswith('.docx'):
+            raise HTTPException(status_code=400, detail="Arquivo DOCX obrigatório")
+
+        with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as f:
+            docx_temp = f.name
+            f.write(await docx.read())
+
+        resultado = gerar_missa.validar_docx(docx_temp)
+        return resultado
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro na validação: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if docx_temp and os.path.exists(docx_temp):
+            try:
+                os.unlink(docx_temp)
+            except Exception:
+                pass
+
+
 @app.post("/api/gerar")
 async def gerar_apresentacao(
     docx: UploadFile = File(...),

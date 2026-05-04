@@ -142,26 +142,20 @@ def _is_section_title(line):
     return False
 
 
-def parse_docx(docx_path, log=None):
-    """Lê um DOCX e retorna seções no mesmo formato que parse_txt() retornava."""
-    doc = Document(docx_path)
-
-    # Extrai linhas preservando negrito e soft returns
+def _extrair_secoes_docx(doc):
+    """Lê parágrafos do Document e retorna lista de seções brutas com metadados."""
     raw_lines = []
     for para in doc.paragraphs:
         full_text = para.text
         if not full_text.strip():
             raw_lines.append('')
             continue
-
         is_bold = _para_is_bold(para)
-
         for sub in full_text.split('\n'):
             text = sub.strip()
             if text:
                 raw_lines.append(f'* {text}' if is_bold else text)
 
-    # Agrupa em blocos separados por linhas em branco
     blocks = []
     current = []
     for line in raw_lines:
@@ -174,7 +168,6 @@ def parse_docx(docx_path, log=None):
     if current:
         blocks.append(current)
 
-    # Identifica blocos de título (linha única que parece cabeçalho)
     title_positions = []
     for i, block in enumerate(blocks):
         if len(block) == 1 and _is_section_title(block[0]):
@@ -182,7 +175,6 @@ def parse_docx(docx_path, log=None):
             matched = _match_keyword(_normalize_kw(raw))
             title_positions.append((i, raw, matched))
 
-    # Mapeamento posicional automático para seções sem keyword reconhecida
     sections_raw = []
     for idx, (pos, raw_title, matched_title) in enumerate(title_positions):
         next_pos = title_positions[idx + 1][0] if idx + 1 < len(title_positions) else len(blocks)
@@ -190,14 +182,86 @@ def parse_docx(docx_path, log=None):
         all_lines = []
         for cb in content_blocks:
             all_lines.extend(cb)
-
         title = matched_title if matched_title else raw_title
-        sections_raw.append({'title': title, 'lines': all_lines, 'auto': not matched_title})
+        sections_raw.append({
+            'title': title,
+            'titulo_original': raw_title,
+            'lines': all_lines,
+            'auto': not matched_title,
+        })
 
     if 6 <= len(sections_raw) <= len(TITULOS_PADRAO):
         for i, s in enumerate(sections_raw):
             if s['auto']:
                 s['title'] = TITULOS_PADRAO[i]
+
+    return sections_raw
+
+
+def validar_docx(docx_path):
+    """Valida o DOCX antes de gerar o PPTX. Retorna erros, avisos e resumo das seções."""
+    try:
+        doc = Document(docx_path)
+        sections_raw = _extrair_secoes_docx(doc)
+    except Exception as e:
+        return {'valido': False, 'erros': [f'Não foi possível ler o arquivo: {e}'], 'avisos': [], 'secoes': []}
+
+    erros = []
+    avisos = []
+    secoes_info = []
+
+    if not sections_raw:
+        erros.append(
+            'Nenhuma seção (título) encontrada. '
+            'Os títulos devem estar em letras MAIÚSCULAS (ex: CANTO DE ENTRADA).'
+        )
+        return {'valido': False, 'erros': erros, 'avisos': avisos, 'secoes': []}
+
+    for s in sections_raw:
+        title = s['title']
+        raw_title = s['titulo_original']
+        lines = s['lines']
+        reconhecido = not s['auto']
+
+        tem_conteudo = any(l.strip() for l in lines)
+        tem_negrito = any(l.startswith('* ') for l in lines)
+        total_linhas = sum(1 for l in lines if l.strip())
+
+        secoes_info.append({
+            'titulo': title,
+            'titulo_original': raw_title,
+            'titulo_reconhecido': reconhecido,
+            'tem_conteudo': tem_conteudo,
+            'tem_negrito': tem_negrito,
+            'total_linhas': total_linhas,
+        })
+
+        if not tem_conteudo:
+            erros.append(f'Seção "{raw_title}" está vazia — nenhum conteúdo encontrado após o título.')
+        else:
+            if not tem_negrito:
+                avisos.append(
+                    f'Seção "{title}" não tem texto em negrito. '
+                    'Refrões devem estar em negrito (selecione e pressione Ctrl+B).'
+                )
+            if not reconhecido:
+                avisos.append(
+                    f'Título "{raw_title}" não é um título litúrgico padrão — '
+                    'verifique se está escrito corretamente.'
+                )
+
+    return {
+        'valido': len(erros) == 0,
+        'erros': erros,
+        'avisos': avisos,
+        'secoes': secoes_info,
+    }
+
+
+def parse_docx(docx_path, log=None):
+    """Lê um DOCX e retorna seções no mesmo formato que parse_txt() retornava."""
+    doc = Document(docx_path)
+    sections_raw = _extrair_secoes_docx(doc)  # já aplica mapeamento posicional
 
     # Converte para o formato interno de blocos usado pelo gerador
     sections = {}
