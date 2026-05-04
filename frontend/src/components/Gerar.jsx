@@ -4,7 +4,7 @@ import { useApi, downloadFile } from '../hooks/useApi';
 import './Gerar.css';
 
 export default function Gerar() {
-  const [txtFile, setTxtFile] = useState(null);
+  const [docxFile, setDocxFile] = useState(null);
   const [pptxFile, setPptxFile] = useState(null);
   const [nomeSaida, setNomeSaida] = useState('missa_pronta');
   const [log, setLog] = useState([]);
@@ -15,8 +15,8 @@ export default function Gerar() {
     setLog([]);
     setError(null);
 
-    if (!txtFile) {
-      setError('Selecione um arquivo .txt');
+    if (!docxFile) {
+      setError('Selecione um arquivo .docx');
       return;
     }
     if (!pptxFile) {
@@ -26,9 +26,9 @@ export default function Gerar() {
 
     try {
       setLog(prev => [...prev, 'Enviando arquivos...']);
-      const blob = await call(gerarApresentacao, txtFile, pptxFile, nomeSaida);
+      const blob = await call(gerarApresentacao, docxFile, pptxFile, nomeSaida);
       setLog(prev => [...prev, '✓ Apresentação gerada com sucesso!']);
-      
+
       const filename = nomeSaida.endsWith('.pptx') ? nomeSaida : nomeSaida + '.pptx';
       downloadFile(blob, filename);
     } catch (err) {
@@ -39,20 +39,20 @@ export default function Gerar() {
   return (
     <div className="gerar-container">
       <div className="gerar-header">
-        <h2>Gerar via TXT</h2>
+        <h2>Gerar Apresentação</h2>
         <p>Insira os arquivos e clique em Gerar</p>
       </div>
 
       <form onSubmit={handleGerar} className="gerar-form">
         <div className="form-group">
-          <label>Cantos (.txt)</label>
+          <label>Cantos (.docx)</label>
           <input
             type="file"
-            accept=".txt"
-            onChange={(e) => setTxtFile(e.target.files[0])}
+            accept=".docx"
+            onChange={(e) => setDocxFile(e.target.files[0])}
             disabled={loading}
           />
-          {txtFile && <span className="file-name">{txtFile.name}</span>}
+          {docxFile && <span className="file-name">{docxFile.name}</span>}
         </div>
 
         <div className="form-group">

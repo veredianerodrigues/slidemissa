@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 gerar_missa.py - Logica de geracao de slides da Missa Catolica
-(Migrado do desktop para web)
 """
 
 import re
@@ -12,6 +11,9 @@ from pptx import Presentation
 from pptx.util import Pt, Cm
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
+from docx import Document
+from docx.oxml.ns import qn as _qn
+from pptx.oxml.ns import qn as _pptx_qn
 
 
 # -- Constantes ---------------------------------------------------------------
@@ -26,7 +28,7 @@ BOX_HEIGHT_CM = 19.05
 
 FONT_NAME = "Verdana"
 MAX_LINES_PER_SLIDE = 8
-FIXED_FONT_SIZE = 55  # Deixe None para automático, ou coloque um valor (ex: 55) para fixar
+FIXED_FONT_SIZE = 55
 HEADER_RE    = re.compile(r'^\[(.+)\]\s*$')
 BRACKET_RE   = re.compile(r'\[([^\]]+)\]')
 
@@ -34,6 +36,44 @@ TITLE_ALIASES = {
     'gloria': 'hino de louvor',
     'glória': 'hino de louvor',
     'canto final': 'final',
+}
+
+TITULOS_PADRAO = [
+    'CANTO DE ENTRADA',
+    'CANTO DO ATO PENITENCIAL',
+    'CANTO DO GLÓRIA',
+    'CANTO DE ACLAMAÇÃO',
+    'CANTO DO OFERTÓRIO',
+    'SANTO',
+    'CANTO DE COMUNHÃO',
+    'CANTO FINAL',
+]
+
+KEYWORDS_MAP = {
+    'CANTO DE ENTRADA': [
+        'entrada', 'inicio', 'início', 'abertura', 'procissao', 'procissão', 'canto inicial'
+    ],
+    'CANTO DO ATO PENITENCIAL': [
+        'penitencial', 'ato penitencial', 'canto penitencial'
+    ],
+    'CANTO DO GLÓRIA': [
+        'gloria', 'glória', 'hino de louvor'
+    ],
+    'CANTO DE ACLAMAÇÃO': [
+        'aclamacao', 'aclamação', 'evangelho'
+    ],
+    'CANTO DO OFERTÓRIO': [
+        'ofertorio', 'ofertório', 'ofertas', 'apresentacao das oferendas', 'apresentação das oferendas'
+    ],
+    'SANTO': [
+        'hosana', 'santo santo', 'santo, santo, santo'
+    ],
+    'CANTO DE COMUNHÃO': [
+        'comunhao', 'comunhão', 'hino de comunhão'
+    ],
+    'CANTO FINAL': [
+        'final', 'saida', 'saída', 'envio', 'despedida', 'canto final'
+    ],
 }
 
 
@@ -51,46 +91,142 @@ def normalize(text):
     return re.sub(r'[\[\]\s]+', ' ', text).strip()
 
 
-def parse_txt(txt_path, log=None):
-    with open(txt_path, 'r', encoding='utf-8') as f:
-        lines = f.readlines()
+def _normalize_kw(text):
+    text = text.lower()
+    return ''.join(
+        c for c in unicodedata.normalize('NFD', text)
+        if unicodedata.category(c) != 'Mn'
+    )
 
-    sections = {}
-    current_key   = None
-    current_title = None
-    current_block = []
 
-    def flush():
-        if current_block and current_key is not None:
-            for sub in split_block(current_block):
-                sections[current_key]['blocos'].append(sub)
-        current_block.clear()
+def _para_is_bold(para):
+    """Detecta negrito via runs explícitos ou hierarquia de estilos do parágrafo."""
+    runs = para.runs
+    if not runs:
+        return False
+    bold_votes = 0
+    for run in runs:
+        if run.bold is True:
+            bold_votes += 1
+        elif run.bold is None:
+            # Negrito não definido no run — verifica a hierarquia de estilos
+            try:
+                style = para.style
+                while style:
+                    if style.font.bold is True:
+                        bold_votes += 1
+                        break
+                    style = style.base_style
+            except Exception:
+                pass
+    return bold_votes > len(runs) / 2
 
-    for raw in lines:
-        line = raw.rstrip('\n').rstrip('\r')
-        m = HEADER_RE.match(line.strip()) or BRACKET_RE.search(line)
-        if m:
-            flush()
-            current_title = m.group(1).strip()
-            current_key   = normalize(current_title)
-            sections[current_key] = {'titulo': current_title, 'blocos': []}
+
+def _match_keyword(text_norm):
+    for title, keywords in KEYWORDS_MAP.items():
+        for kw in keywords:
+            if _normalize_kw(kw) in text_norm:
+                return title
+    return None
+
+
+def _is_section_title(line):
+    """Linha de título: curta (<= 60 chars), toda em maiúsculas OU contém keyword conhecida."""
+    line = line.lstrip('* ').strip()
+    if not line or len(line) > 60:
+        return False
+    if line.upper() == line and len(line) > 4 and any(c.isalpha() for c in line):
+        return True
+    if not any(c in line for c in '.!?,') and _match_keyword(_normalize_kw(line)):
+        return True
+    return False
+
+
+def parse_docx(docx_path, log=None):
+    """Lê um DOCX e retorna seções no mesmo formato que parse_txt() retornava."""
+    doc = Document(docx_path)
+
+    # Extrai linhas preservando negrito e soft returns
+    raw_lines = []
+    for para in doc.paragraphs:
+        full_text = para.text
+        if not full_text.strip():
+            raw_lines.append('')
             continue
-        if not line.strip():
-            flush()
-            continue
-        if current_key is not None:
-            is_bold = line.startswith('*')
-            text    = line.lstrip('* ').strip()
+
+        is_bold = _para_is_bold(para)
+
+        for sub in full_text.split('\n'):
+            text = sub.strip()
             if text:
-                current_block.append({'text': text, 'bold': is_bold})
+                raw_lines.append(f'* {text}' if is_bold else text)
+            else:
+                raw_lines.append('')
+        raw_lines.append('')
 
-    flush()
+    # Agrupa em blocos separados por linhas em branco
+    blocks = []
+    current = []
+    for line in raw_lines:
+        if not line.strip():
+            if current:
+                blocks.append(current)
+                current = []
+        else:
+            current.append(line)
+    if current:
+        blocks.append(current)
 
-    for key in sections:
+    # Identifica blocos de título (linha única que parece cabeçalho)
+    title_positions = []
+    for i, block in enumerate(blocks):
+        if len(block) == 1 and _is_section_title(block[0]):
+            raw = block[0].lstrip('* ').strip()
+            matched = _match_keyword(_normalize_kw(raw))
+            title_positions.append((i, raw, matched))
+
+    # Mapeamento posicional automático para seções sem keyword reconhecida
+    sections_raw = []
+    for idx, (pos, raw_title, matched_title) in enumerate(title_positions):
+        next_pos = title_positions[idx + 1][0] if idx + 1 < len(title_positions) else len(blocks)
+        content_blocks = blocks[pos + 1:next_pos]
+        all_lines = []
+        for cb in content_blocks:
+            all_lines.extend(cb)
+
+        title = matched_title if matched_title else raw_title
+        sections_raw.append({'title': title, 'lines': all_lines, 'auto': not matched_title})
+
+    if 6 <= len(sections_raw) <= len(TITULOS_PADRAO):
+        for i, s in enumerate(sections_raw):
+            if s['auto']:
+                s['title'] = TITULOS_PADRAO[i]
+
+    # Converte para o formato interno de blocos usado pelo gerador
+    sections = {}
+    for s in sections_raw:
+        title = s['title']
+        key = normalize(title)
+        line_dicts = []
+        for line in s['lines']:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            is_bold = stripped.startswith('* ')
+            text = stripped[2:] if is_bold else stripped
+            if text:
+                line_dicts.append({'text': text, 'bold': is_bold})
+
+        blocos = []
+        for sub in split_block(line_dicts):
+            blocos.append(sub)
+
         expanded = []
-        for block in sections[key]['blocos']:
+        for block in blocos:
             expanded.extend(auto_split_large(block, 48))
-        sections[key]['blocos'] = expanded
+
+        if expanded:
+            sections[key] = {'titulo': title, 'blocos': expanded}
 
     if log:
         log('Secoes encontradas: ' + str(len(sections)))
@@ -135,43 +271,51 @@ def split_block(block_lines):
     return [{'lines': [l['text'] for l in block_lines], 'bold': bold_majority}]
 
 
-def estimate_lines_needed(text_lines, font_size_pt, bold=False):
-    box_width_emu  = BOX_WIDTH_CM * 360000
-    # Fatores calibrados para Verdana: bold ocupa ~8% mais que regular
+def estimate_lines_needed(text_lines, font_size_pt, bold=False, box_width_cm=BOX_WIDTH_CM):
+    box_width_emu  = box_width_cm * 360000
     char_width_factor = 0.65 if bold else 0.60
     avg_char_w_emu = font_size_pt * char_width_factor * 12700
     chars_per_line = box_width_emu / avg_char_w_emu
     return sum(max(1, math.ceil(len(ln) / chars_per_line)) for ln in text_lines)
 
 
-def estimate_max_lines(font_size_pt):
-    box_height_emu  = BOX_HEIGHT_CM * 360000
+def estimate_max_lines(font_size_pt, box_height_cm=BOX_HEIGHT_CM):
+    box_height_emu  = box_height_cm * 360000
     line_height_emu = font_size_pt * 1.25 * 12700
     return int(box_height_emu / line_height_emu)
 
 
-def auto_split_large(block, font_min):
+def auto_split_large(block, font_min, box_width_cm=BOX_WIDTH_CM, box_height_cm=BOX_HEIGHT_CM):
     lines = block['lines']
     n = len(lines)
 
     if n == 0:
         return []
 
-    # Linha única não pode ser dividida
-    if n == 1:
-        return [block]
-
     font_est = FIXED_FONT_SIZE if FIXED_FONT_SIZE else font_min
     is_bold = block.get('bold', False)
+    max_lines = estimate_max_lines(font_est, box_height_cm=box_height_cm)
 
-    if n <= MAX_LINES_PER_SLIDE and estimate_lines_needed(lines, font_est, bold=is_bold) <= MAX_LINES_PER_SLIDE:
+    # Linha única longa: divide por palavras se não couber no slide
+    if n == 1:
+        if estimate_lines_needed(lines, font_est, bold=is_bold, box_width_cm=box_width_cm) <= max_lines:
+            return [block]
+        words = lines[0].split()
+        if len(words) <= 1:
+            return [block]
+        mid = math.ceil(len(words) / 2)
+        left  = {'lines': [' '.join(words[:mid])], 'bold': is_bold}
+        right = {'lines': [' '.join(words[mid:])], 'bold': is_bold}
+        return (auto_split_large(left, font_min, box_width_cm, box_height_cm) +
+                auto_split_large(right, font_min, box_width_cm, box_height_cm))
+
+    if n <= MAX_LINES_PER_SLIDE and estimate_lines_needed(lines, font_est, bold=is_bold, box_width_cm=box_width_cm) <= max_lines:
         return [block]
 
     mid = math.ceil(n / 2)
-
     left  = {'lines': lines[:mid], 'bold': block['bold']}
     right = {'lines': lines[mid:], 'bold': block['bold']}
-    return auto_split_large(left, font_min) + auto_split_large(right, font_min)
+    return auto_split_large(left, font_min, box_width_cm, box_height_cm) + auto_split_large(right, font_min, box_width_cm, box_height_cm)
 
 
 def slide_full_text(slide):
@@ -204,19 +348,14 @@ def get_bg_color(slide):
 
 
 def detect_slide_format(prs):
-    slide_width = prs.slide_width / 360000
-    slide_height = prs.slide_height / 360000
-    aspect_ratio = slide_width / slide_height
-    
-    if aspect_ratio > 1.5:
-        return 25.4, 14.29
-    else:
-        return 25.4, 19.05
+    slide_width_cm  = prs.slide_width  / 360000
+    slide_height_cm = prs.slide_height / 360000
+    return slide_width_cm, slide_height_cm
 
 
-def choose_font_size(text_lines, font_min=48, font_max=60):
+def choose_font_size(text_lines, font_min=48, font_max=60, box_width_cm=BOX_WIDTH_CM, box_height_cm=BOX_HEIGHT_CM):
     for size in range(font_max, font_min - 2, -2):
-        if estimate_lines_needed(text_lines, size) <= estimate_max_lines(size):
+        if estimate_lines_needed(text_lines, size, box_width_cm=box_width_cm) <= estimate_max_lines(size, box_height_cm=box_height_cm):
             return size
     return font_min
 
@@ -224,15 +363,15 @@ def choose_font_size(text_lines, font_min=48, font_max=60):
 def create_song_slide(prs, block, bg_color, box_width_cm, box_height_cm, font_min=48, font_max=60, fixed_font_size=None):
     lines     = block['lines']
     is_bold   = block['bold']
-    font_size = fixed_font_size if fixed_font_size else choose_font_size(lines, font_min, font_max)
+    font_size = fixed_font_size if fixed_font_size else choose_font_size(lines, font_min, font_max, box_width_cm, box_height_cm)
 
     slide = prs.slides.add_slide(prs.slide_layouts[6])
-    
+
     for shape in list(slide.shapes):
         if shape.is_placeholder or (hasattr(shape, 'text') and not shape.text.strip()):
             sp = shape.element
             sp.getparent().remove(sp)
-    
+
     fill  = slide.background.fill
     fill.solid()
     fill.fore_color.rgb = bg_color
@@ -243,7 +382,9 @@ def create_song_slide(prs, block, bg_color, box_width_cm, box_height_cm, font_mi
     )
     tf = txBox.text_frame
     tf.word_wrap = True
-    tf._txBody.set('anchor', 'ctr')
+    body_pr = tf._txBody.find(_pptx_qn('a:bodyPr'))
+    if body_pr is not None:
+        body_pr.set('anchor', 'ctr')
 
     for i, line in enumerate(lines):
         para = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
@@ -271,13 +412,13 @@ def move_slide(prs, from_idx, to_idx):
         sldIdLst.append(el)
 
 
-def gerar(txt_path, pptx_path, output_path, fonte_min=48, fonte_max=60, log=None):
+def gerar(docx_path, pptx_path, output_path, fonte_min=48, fonte_max=60, log=None):
     if log is None:
         log = lambda msg: None
 
     try:
-        log('Lendo cantos: ' + txt_path)
-        cantos = parse_txt(txt_path, log)
+        log('Lendo cantos: ' + docx_path)
+        cantos = parse_docx(docx_path, log)
 
         log('Carregando ritual: ' + pptx_path)
         prs = Presentation(pptx_path)
@@ -291,10 +432,10 @@ def gerar(txt_path, pptx_path, output_path, fonte_min=48, fonte_max=60, log=None
                 log('  Slide ' + str(i + 1).zfill(2) + ': [' + cantos[key]['titulo'] + ']')
 
         if not placeholders:
-            return False, 'Nenhum titulo do TXT foi encontrado no PPTX.'
+            return False, 'Nenhum titulo do DOCX foi encontrado no PPTX.'
 
         box_width, box_height = detect_slide_format(prs)
-        log('Formato do slide detectado: ' + ('4:3' if box_height > 14 else '16:9'))
+        log(f'Dimensões do slide: {box_width:.2f} x {box_height:.2f} cm')
 
         total_inserted = 0
         for ph_idx, sec_key in reversed(placeholders):
@@ -304,7 +445,7 @@ def gerar(txt_path, pptx_path, output_path, fonte_min=48, fonte_max=60, log=None
             log('Inserindo ' + str(len(blocos)) + ' slide(s) para [' + data['titulo'] + ']')
             slide_idx = 0
             for j, block in enumerate(blocos):
-                sub_blocos = auto_split_large(block, fonte_min)
+                sub_blocos = auto_split_large(block, fonte_min, box_width, box_height)
                 for sub_block in sub_blocos:
                     create_song_slide(prs, sub_block, bg_color, box_width, box_height, fonte_min, fonte_max, fixed_font_size=FIXED_FONT_SIZE)
                     move_slide(prs, len(prs.slides) - 1, ph_idx + 1 + slide_idx)
@@ -313,127 +454,6 @@ def gerar(txt_path, pptx_path, output_path, fonte_min=48, fonte_max=60, log=None
 
         prs.save(output_path)
         msg = str(total_inserted) + ' slides inseridos. Total final: ' + str(len(prs.slides)) + ' slides.'
-        log(msg)
-
-        # Salvar no banco automaticamente
-        try:
-            from . import banco
-            salvos = 0
-            for sec_key, data in cantos.items():
-                if data['blocos']:
-                    banco.salvar_canto(data['titulo'], data['blocos'])
-                    salvos += 1
-            if salvos:
-                log(str(salvos) + ' canto(s) salvos no banco.')
-        except Exception as e_banco:
-            log('Aviso: nao foi possivel salvar no banco.')
-
-        return True, msg
-
-    except Exception as e:
-        return False, 'Erro: ' + str(e)
-
-
-def gerar_do_banco(pptx_path, chaves, output_path, fonte_min=48, fonte_max=60, log=None):
-    """
-    Gera slides usando cantos já cadastrados no banco.
-    pptx_path: caminho do PPTX base
-    chaves: lista de chaves de cantos (ex: ["CANTO DE ENTRADA — Eu venho"])
-    """
-    if log is None:
-        log = lambda msg: None
-
-    try:
-        from . import banco
-        
-        log('Carregando ritual: ' + pptx_path)
-        prs = Presentation(pptx_path)
-        log('Total de slides: ' + str(len(prs.slides)))
-
-        # Montar dicionário
-        cantos = {}
-        for chave in chaves:
-            blocos = banco.carregar_blocos(chave)
-            if blocos:
-                # Extrair título a partir da chave (antes de " — ")
-                titulo = chave.split(' — ')[0] if ' — ' in chave else chave
-                key = normalize(titulo)
-                cantos[key] = {'titulo': titulo, 'blocos': blocos}
-
-        placeholders = []
-        for i, slide in enumerate(prs.slides):
-            key = slide_normalized_key(slide)
-            if key and key in cantos:
-                placeholders.append((i, key))
-                log('  Slide ' + str(i + 1).zfill(2) + ': [' + cantos[key]['titulo'] + ']')
-
-        if not placeholders:
-            return False, 'Nenhum titulo dos cantos selecionados foi encontrado no PPTX.'
-
-        box_width, box_height = detect_slide_format(prs)
-        log('Formato do slide detectado: ' + ('4:3' if box_height > 14 else '16:9'))
-
-        total_inserted = 0
-        for ph_idx, sec_key in reversed(placeholders):
-            data     = cantos[sec_key]
-            blocos   = data['blocos']
-            bg_color = get_bg_color(prs.slides[ph_idx])
-            log('Inserindo ' + str(len(blocos)) + ' slide(s) para [' + data['titulo'] + ']')
-            slide_idx = 0
-            for j, block in enumerate(blocos):
-                sub_blocos = auto_split_large(block, fonte_min)
-                for sub_block in sub_blocos:
-                    create_song_slide(prs, sub_block, bg_color, box_width, box_height, fonte_min, fonte_max, fixed_font_size=FIXED_FONT_SIZE)
-                    move_slide(prs, len(prs.slides) - 1, ph_idx + 1 + slide_idx)
-                    slide_idx += 1
-            total_inserted += slide_idx
-
-        prs.save(output_path)
-        msg = str(total_inserted) + ' slides inseridos. Total final: ' + str(len(prs.slides)) + ' slides.'
-        log(msg)
-        return True, msg
-
-    except Exception as e:
-        return False, 'Erro: ' + str(e)
-
-
-def gerar_pptx_cantos_simples(chaves, output_path, fonte_min=48, fonte_max=60, log=None):
-    """
-    Gera um PPTX simples contendo apenas os cantos selecionados do banco.
-    Sem ritual base - apenas os cantos.
-    chaves: lista de chaves de cantos (ex: ["CANTO DE ENTRADA — Eu venho"])
-    """
-    if log is None:
-        log = lambda msg: None
-
-    try:
-        from . import banco
-
-        log('Criando apresentação simples com cantos...')
-        prs = Presentation()
-        prs.slide_width = Cm(25.4)
-        prs.slide_height = Cm(19.05)
-
-        log('Total de cantos: ' + str(len(chaves)))
-
-        box_width = Cm(25.4)
-        box_height = Cm(19.05)
-        bg_color = BG_COLOR
-
-        total_slides = 0
-        for chave in chaves:
-            blocos = banco.carregar_blocos(chave)
-            if blocos:
-                titulo = chave.split(' — ')[0] if ' — ' in chave else chave
-                log('Adicionando ' + str(len(blocos)) + ' slide(s) para [' + titulo + ']')
-                for block in blocos:
-                    sub_blocos = auto_split_large(block, fonte_min)
-                    for sub_block in sub_blocos:
-                        create_song_slide(prs, sub_block, bg_color, box_width, box_height, fonte_min, fonte_max, fixed_font_size=FIXED_FONT_SIZE)
-                        total_slides += 1
-
-        prs.save(output_path)
-        msg = str(total_slides) + ' slide(s) gerado(s) com sucesso.'
         log(msg)
         return True, msg
 
