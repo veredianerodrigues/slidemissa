@@ -1,0 +1,28 @@
+/* ListaCantos.css */
+
+.lista-cantos {
+  margin: 24px 0;
+}
+
+.lista-cantos-header {
+  margin-bottom: 16px;
+}
+
+.lista-cantos-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #8f0517;
+  margin: 0 0 4px 0;
+}
+
+.lista-cantos-header p {
+  font-size: 12px;
+  color: #888;
+  margin: 0;
+}
+
+.lista-cantos-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}

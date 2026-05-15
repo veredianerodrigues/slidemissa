@@ -11,6 +11,20 @@ export const validarDocx = async (docxFile) => {
   return response.data;
 };
 
+export const gerarEditado = async (secoes, pptxFile, nomeSaida) => {
+  const formData = new FormData();
+  formData.append('pptx', pptxFile);
+  formData.append('secoes', JSON.stringify(secoes));
+  formData.append('nome_saida', nomeSaida);
+
+  const response = await axios.post(`${API_BASE}/gerar-editado`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    responseType: 'blob',
+  });
+
+  return response.data;
+};
+
 export const gerarApresentacao = async (docxFile, pptxFile, nomeSaida) => {
   const formData = new FormData();
   formData.append('docx', docxFile);
