@@ -143,7 +143,11 @@ def _is_section_title(line):
 
 
 def _extrair_secoes_docx(doc):
-    """Lê parágrafos do Document e retorna lista de seções brutas com metadados."""
+    """Lê parágrafos do Document e retorna lista de seções brutas com metadados.
+
+    Títulos são detectados em qualquer linha — não exige linha em branco anterior.
+    Linhas em branco dentro de uma seção são preservadas como separadores de slide.
+    """
     raw_lines = []
     for para in doc.paragraphs:
         full_text = para.text
@@ -156,39 +160,47 @@ def _extrair_secoes_docx(doc):
             if text:
                 raw_lines.append(f'* {text}' if is_bold else text)
 
-    blocks = []
-    current = []
-    for line in raw_lines:
-        if not line.strip():
-            if current:
-                blocks.append(current)
-                current = []
-        else:
-            current.append(line)
-    if current:
-        blocks.append(current)
-
-    title_positions = []
-    for i, block in enumerate(blocks):
-        if len(block) == 1 and _is_section_title(block[0]):
-            raw = block[0].lstrip('* ').strip()
-            matched = _match_keyword(_normalize_kw(raw))
-            title_positions.append((i, raw, matched))
-
     sections_raw = []
-    for idx, (pos, raw_title, matched_title) in enumerate(title_positions):
-        next_pos = title_positions[idx + 1][0] if idx + 1 < len(title_positions) else len(blocks)
-        content_blocks = blocks[pos + 1:next_pos]
-        all_lines = []
-        for cb in content_blocks:
-            all_lines.extend(cb)
-        title = matched_title if matched_title else raw_title
+    current_raw_title = None
+    current_lines = []
+
+    for line in raw_lines:
+        clean = line.lstrip('* ').strip()
+
+        if clean and _is_section_title(clean):
+            if current_raw_title is not None:
+                sections_raw.append({
+                    'titulo_original': current_raw_title,
+                    'lines': current_lines,
+                })
+            current_raw_title = clean
+            current_lines = []
+        else:
+            if current_raw_title is not None:
+                # preserva linhas em branco como separadores de slide
+                if line.strip() or current_lines:
+                    current_lines.append(line)
+
+    if current_raw_title is not None:
         sections_raw.append({
-            'title': title,
-            'titulo_original': raw_title,
-            'lines': all_lines,
-            'auto': not matched_title,
+            'titulo_original': current_raw_title,
+            'lines': current_lines,
         })
+
+    # Remove linhas em branco no início/fim de cada seção
+    for s in sections_raw:
+        lines = s['lines']
+        while lines and not lines[0].strip():
+            lines.pop(0)
+        while lines and not lines[-1].strip():
+            lines.pop()
+
+    # Aplica mapeamento por keyword e mapeamento posicional
+    for s in sections_raw:
+        raw = s['titulo_original']
+        matched = _match_keyword(_normalize_kw(raw))
+        s['title'] = matched if matched else raw
+        s['auto'] = not matched
 
     if 6 <= len(sections_raw) <= len(TITULOS_PADRAO):
         for i, s in enumerate(sections_raw):
@@ -277,23 +289,28 @@ def parse_docx(docx_path, log=None):
     for s in sections_raw:
         title = s['title']
         key = normalize(title)
-        line_dicts = []
+
+        # Agrupa por linha em branco (separador de slide explícito)
+        grupos = []
+        grupo_atual = []
         for line in s['lines']:
             stripped = line.strip()
             if not stripped:
-                continue
-            is_bold = stripped.startswith('* ')
-            text = stripped[2:] if is_bold else stripped
-            if text:
-                line_dicts.append({'text': text, 'bold': is_bold})
-
-        blocos = []
-        for sub in split_block(line_dicts):
-            blocos.append(sub)
+                if grupo_atual:
+                    grupos.append(grupo_atual)
+                    grupo_atual = []
+            else:
+                is_bold = stripped.startswith('* ')
+                text = stripped[2:] if is_bold else stripped
+                if text:
+                    grupo_atual.append({'text': text, 'bold': is_bold})
+        if grupo_atual:
+            grupos.append(grupo_atual)
 
         expanded = []
-        for block in blocos:
-            expanded.extend(auto_split_large(block, 48))
+        for grupo in grupos:
+            for sub in split_block(grupo):
+                expanded.extend(auto_split_large(sub, 48))
 
         if expanded:
             sections[key] = {'titulo': title, 'blocos': expanded}
