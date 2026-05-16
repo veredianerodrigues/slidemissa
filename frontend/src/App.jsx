@@ -1,7 +1,17 @@
+import { useState } from 'react';
 import Gerar from './components/Gerar';
+import Login from './components/Login';
 import './App.css';
 
 function App() {
+  const [autenticado, setAutenticado] = useState(
+    () => sessionStorage.getItem('auth') === '1'
+  );
+
+  if (!autenticado) {
+    return <Login onAutenticado={() => setAutenticado(true)} />;
+  }
+
   return (
     <div className="app">
       <header className="app-header">

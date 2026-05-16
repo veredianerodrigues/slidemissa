@@ -5,7 +5,8 @@ main.py - Backend FastAPI para Gerador de Slides da Missa
 """
 
 import os
-from fastapi import FastAPI, UploadFile, File, HTTPException
+import json
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import tempfile
@@ -110,6 +111,63 @@ async def gerar_apresentacao(
 
     finally:
         for path in [docx_temp, pptx_temp]:
+            if path and os.path.exists(path):
+                try:
+                    os.unlink(path)
+                except Exception:
+                    pass
+
+
+@app.post("/api/gerar-editado")
+async def gerar_apresentacao_editada(
+    pptx: UploadFile = File(...),
+    secoes: str = Form(...),
+    nome_saida: str = Form(default="missa_pronta"),
+):
+    pptx_temp = None
+    output_temp = None
+
+    try:
+        if not pptx.filename.endswith('.pptx'):
+            raise HTTPException(status_code=400, detail="Arquivo PPTX obrigatório")
+
+        try:
+            secoes_data = json.loads(secoes)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Campo 'secoes' não é um JSON válido")
+
+        with tempfile.NamedTemporaryFile(suffix='.pptx', delete=False) as f:
+            pptx_temp = f.name
+            f.write(await pptx.read())
+
+        output_temp = tempfile.NamedTemporaryFile(suffix='.pptx', delete=False).name
+
+        def log_func(msg):
+            logger.info(msg)
+
+        ok, msg = gerar_missa.gerar_de_secoes(secoes_data, pptx_temp, output_temp, log=log_func)
+
+        if not ok:
+            raise HTTPException(status_code=400, detail=f"Erro ao gerar: {msg}")
+
+        if not nome_saida.endswith('.pptx'):
+            nome_saida += '.pptx'
+
+        return FileResponse(
+            path=output_temp,
+            filename=nome_saida,
+            media_type='application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            headers={"Content-Disposition": f"attachment; filename={nome_saida}"}
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro na geração editada: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    finally:
+        for path in [pptx_temp]:
             if path and os.path.exists(path):
                 try:
                     os.unlink(path)

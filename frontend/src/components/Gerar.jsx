@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { gerarApresentacao, validarDocx } from '../api';
+import { gerarApresentacao, gerarEditado, validarDocx } from '../api';
 import { useApi, downloadFile } from '../hooks/useApi';
+import ListaCantos from './ListaCantos';
 import './Gerar.css';
 
 export default function Gerar() {
@@ -9,6 +10,7 @@ export default function Gerar() {
   const [nomeSaida, setNomeSaida] = useState('missa_pronta');
   const [validacao, setValidacao] = useState(null);
   const [validando, setValidando] = useState(false);
+  const [secoesEditadas, setSecoesEditadas] = useState(null);
   const [log, setLog] = useState([]);
   const { call, loading, error, setError } = useApi();
 
@@ -16,6 +18,7 @@ export default function Gerar() {
     const file = e.target.files[0];
     setDocxFile(file);
     setValidacao(null);
+    setSecoesEditadas(null);
     setError(null);
     if (!file) return;
 
@@ -23,6 +26,9 @@ export default function Gerar() {
     try {
       const resultado = await validarDocx(file);
       setValidacao(resultado);
+      if (resultado.valido || resultado.secoes.length > 0) {
+        setSecoesEditadas(resultado.secoes.map((s) => ({ titulo: s.titulo, linhas: s.linhas })));
+      }
     } catch {
       setValidacao({ valido: false, erros: ['Não foi possível validar o arquivo.'], avisos: [], secoes: [] });
     } finally {
@@ -41,7 +47,12 @@ export default function Gerar() {
 
     try {
       setLog(prev => [...prev, 'Enviando arquivos...']);
-      const blob = await call(gerarApresentacao, docxFile, pptxFile, nomeSaida);
+      let blob;
+      if (secoesEditadas) {
+        blob = await call(gerarEditado, secoesEditadas, pptxFile, nomeSaida);
+      } else {
+        blob = await call(gerarApresentacao, docxFile, pptxFile, nomeSaida);
+      }
       setLog(prev => [...prev, '✓ Apresentação gerada com sucesso!']);
       const filename = nomeSaida.endsWith('.pptx') ? nomeSaida : nomeSaida + '.pptx';
       downloadFile(blob, filename);
@@ -69,6 +80,10 @@ export default function Gerar() {
             onChange={handleDocxChange}
             disabled={loading}
           />
+          <div className="dica-formato">
+            Os títulos das seções devem estar em <strong>MAIÚSCULAS</strong> no documento.
+            Ex: <code>ABERTURA</code>, <code>GLÓRIA</code>, <code>SANTO</code>, <code>COMUNHÃO</code>
+          </div>
           {docxFile && <span className="file-name">{docxFile.name}</span>}
         </div>
 
@@ -86,23 +101,14 @@ export default function Gerar() {
             {validacao.avisos.map((a, i) => (
               <div key={i} className="validacao-item aviso">⚠️ {a}</div>
             ))}
-
-            {validacao.secoes.length > 0 && (
-              <div className="validacao-secoes">
-                <div className="validacao-secoes-titulo">
-                  Seções encontradas ({validacao.secoes.length})
-                </div>
-                {validacao.secoes.map((s, i) => (
-                  <div key={i} className={`secao-item ${s.tem_negrito ? 'ok' : 'sem-negrito'}`}>
-                    <span className="secao-nome">{s.titulo}</span>
-                    <span className="secao-info">
-                      {s.tem_negrito ? '✓ refrão' : '⚠ sem negrito'} · {s.total_linhas} linhas
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
+        )}
+
+        {secoesEditadas && secoesEditadas.length > 0 && (
+          <ListaCantos
+            secoes={validacao.secoes}
+            onChange={setSecoesEditadas}
+          />
         )}
 
         <div className="form-group">

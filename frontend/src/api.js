@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = '/api';
 
 export const validarDocx = async (docxFile) => {
   const formData = new FormData();
@@ -8,6 +8,20 @@ export const validarDocx = async (docxFile) => {
   const response = await axios.post(`${API_BASE}/validar`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
+  return response.data;
+};
+
+export const gerarEditado = async (secoes, pptxFile, nomeSaida) => {
+  const formData = new FormData();
+  formData.append('pptx', pptxFile);
+  formData.append('secoes', JSON.stringify(secoes));
+  formData.append('nome_saida', nomeSaida);
+
+  const response = await axios.post(`${API_BASE}/gerar-editado`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    responseType: 'blob',
+  });
+
   return response.data;
 };
 
