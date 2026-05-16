@@ -80,6 +80,10 @@ export default function Gerar() {
             onChange={handleDocxChange}
             disabled={loading}
           />
+          <div className="dica-formato">
+            Os títulos das seções devem estar em <strong>MAIÚSCULAS</strong> no documento.
+            Ex: <code>ABERTURA</code>, <code>GLÓRIA</code>, <code>SANTO</code>, <code>COMUNHÃO</code>
+          </div>
           {docxFile && <span className="file-name">{docxFile.name}</span>}
         </div>
 

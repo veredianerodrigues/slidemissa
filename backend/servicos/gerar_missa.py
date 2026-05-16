@@ -66,7 +66,7 @@ KEYWORDS_MAP = {
         'ofertorio', 'ofertório', 'ofertas', 'apresentacao das oferendas', 'apresentação das oferendas'
     ],
     'SANTO': [
-        'santo', 'hosana', 'santo santo', 'santo, santo, santo'
+        'hosana', 'santo santo', 'santo, santo, santo'
     ],
     'CANTO DE COMUNHÃO': [
         'comunhao', 'comunhão', 'hino de comunhão'
@@ -131,15 +131,21 @@ def _match_keyword(text_norm):
 
 
 def _is_section_title(line):
-    """Linha de título: curta (<= 60 chars), toda em maiúsculas OU contém keyword conhecida."""
+    """Linha de título: toda em maiúsculas, curta (<= 60 chars), sem pontuação de frase.
+
+    Aceita títulos com dois-pontos no final (ex: 'ENTRADA:', 'GLÓRIA:').
+    """
     line = line.lstrip('* ').strip()
     if not line or len(line) > 60:
         return False
-    if line.upper() == line and len(line) > 4 and any(c.isalpha() for c in line):
-        return True
-    if not any(c in line for c in '.!?,') and _match_keyword(_normalize_kw(line)):
-        return True
-    return False
+    # Dois-pontos no final é formatação de título, não conteúdo — remove antes de validar
+    if line.endswith(':'):
+        line = line[:-1].strip()
+    if not line:
+        return False
+    if any(c in line for c in '.!?,;'):
+        return False
+    return line.upper() == line and len(line) > 4 and any(c.isalpha() for c in line)
 
 
 def _extrair_secoes_docx(doc):
@@ -173,7 +179,8 @@ def _extrair_secoes_docx(doc):
                     'titulo_original': current_raw_title,
                     'lines': current_lines,
                 })
-            current_raw_title = clean
+            # Remove dois-pontos de formatação do título (ex: "ENTRADA:" → "ENTRADA")
+            current_raw_title = clean[:-1].strip() if clean.endswith(':') else clean
             current_lines = []
         else:
             if current_raw_title is not None:
