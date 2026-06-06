@@ -36,6 +36,8 @@ TITLE_ALIASES = {
     'gloria': 'hino de louvor',
     'glória': 'hino de louvor',
     'canto final': 'final',
+    'canto santo santo santo': 'santo',
+    'canto santo': 'santo',
 }
 
 TITULOS_PADRAO = [
@@ -66,7 +68,7 @@ KEYWORDS_MAP = {
         'ofertorio', 'ofertório', 'ofertas', 'apresentacao das oferendas', 'apresentação das oferendas'
     ],
     'SANTO': [
-        'hosana', 'santo santo', 'santo, santo, santo'
+        'hosana', 'canto santo', 'santo, santo, santo'
     ],
     'CANTO DE COMUNHÃO': [
         'comunhao', 'comunhão', 'hino de comunhão'
@@ -79,6 +81,8 @@ KEYWORDS_MAP = {
 
 def normalize(text):
     text = text.lower()
+    text = re.sub(r'[,;:.!?]+', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
     text = re.sub(r'\bcanto\s+(?:de|da|do|d[oa]s?)\s+', '', text)
 
     for alias, canonical in TITLE_ALIASES.items():
@@ -143,7 +147,7 @@ def _is_section_title(line):
         line = line[:-1].strip()
     if not line:
         return False
-    if any(c in line for c in '.!?,;'):
+    if any(c in line for c in '.!?;'):
         return False
     return line.upper() == line and len(line) > 4 and any(c.isalpha() for c in line)
 
