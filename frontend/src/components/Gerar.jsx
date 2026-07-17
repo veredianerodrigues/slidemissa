@@ -81,8 +81,8 @@ export default function Gerar() {
             disabled={loading}
           />
           <div className="dica-formato">
-            Os títulos das seções devem estar em <strong>MAIÚSCULAS</strong> no documento.
-            Ex: <code>ABERTURA</code>, <code>GLÓRIA</code>, <code>SANTO</code>, <code>COMUNHÃO</code>
+            Marque cada seção com <code>CANTO:N</code> no documento.
+            Ex: <code>CANTO:1</code>, <code>CANTO:2</code>, <code>CANTO:3</code>…
           </div>
           {docxFile && <span className="file-name">{docxFile.name}</span>}
         </div>
