@@ -33,7 +33,7 @@ app.add_middleware(
 
 
 @app.post("/api/validar")
-async def validar_docx_endpoint(docx: UploadFile = File(...)):
+async def validar_docx_endpoint(docx: UploadFile = File(...), modo: str = Form(default=None)):
     docx_temp = None
     try:
         if not docx.filename.endswith('.docx'):
@@ -43,7 +43,7 @@ async def validar_docx_endpoint(docx: UploadFile = File(...)):
             docx_temp = f.name
             f.write(await docx.read())
 
-        resultado = gerar_missa.validar_docx(docx_temp)
+        resultado = gerar_missa.validar_docx(docx_temp, modo=modo)
         return resultado
 
     except HTTPException:
@@ -63,7 +63,8 @@ async def validar_docx_endpoint(docx: UploadFile = File(...)):
 async def gerar_apresentacao(
     docx: UploadFile = File(...),
     pptx: UploadFile = File(...),
-    nome_saida: str = "missa_pronta"
+    nome_saida: str = "missa_pronta",
+    modo: str = Form(default=None),
 ):
     docx_temp = None
     pptx_temp = None
@@ -88,7 +89,7 @@ async def gerar_apresentacao(
         def log_func(msg):
             logger.info(msg)
 
-        ok, msg = gerar_missa.gerar(docx_temp, pptx_temp, output_temp, log=log_func)
+        ok, msg = gerar_missa.gerar(docx_temp, pptx_temp, output_temp, log=log_func, modo=modo)
 
         if not ok:
             raise HTTPException(status_code=400, detail=f"Erro ao gerar: {msg}")

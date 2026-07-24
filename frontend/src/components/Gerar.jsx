@@ -5,6 +5,7 @@ import ListaCantos from './ListaCantos';
 import './Gerar.css';
 
 export default function Gerar() {
+  const [modo, setModo] = useState('canto');
   const [docxFile, setDocxFile] = useState(null);
   const [pptxFile, setPptxFile] = useState(null);
   const [nomeSaida, setNomeSaida] = useState('missa_pronta');
@@ -14,9 +15,7 @@ export default function Gerar() {
   const [log, setLog] = useState([]);
   const { call, loading, error, setError } = useApi();
 
-  const handleDocxChange = async (e) => {
-    const file = e.target.files[0];
-    setDocxFile(file);
+  const validarArquivo = async (file, modoAtual) => {
     setValidacao(null);
     setSecoesEditadas(null);
     setError(null);
@@ -24,7 +23,7 @@ export default function Gerar() {
 
     setValidando(true);
     try {
-      const resultado = await validarDocx(file);
+      const resultado = await validarDocx(file, modoAtual);
       setValidacao(resultado);
       if (resultado.valido || resultado.secoes.length > 0) {
         setSecoesEditadas(resultado.secoes.map((s) => ({ titulo: s.titulo, linhas: s.linhas })));
@@ -34,6 +33,18 @@ export default function Gerar() {
     } finally {
       setValidando(false);
     }
+  };
+
+  const handleDocxChange = (e) => {
+    const file = e.target.files[0];
+    setDocxFile(file);
+    validarArquivo(file, modo);
+  };
+
+  const handleModoChange = (novoModo) => {
+    if (novoModo === modo) return;
+    setModo(novoModo);
+    validarArquivo(docxFile, novoModo);
   };
 
   const handleGerar = async (e) => {
@@ -51,7 +62,7 @@ export default function Gerar() {
       if (secoesEditadas) {
         blob = await call(gerarEditado, secoesEditadas, pptxFile, nomeSaida);
       } else {
-        blob = await call(gerarApresentacao, docxFile, pptxFile, nomeSaida);
+        blob = await call(gerarApresentacao, docxFile, pptxFile, nomeSaida, modo);
       }
       setLog(prev => [...prev, '✓ Apresentação gerada com sucesso!']);
       const filename = nomeSaida.endsWith('.pptx') ? nomeSaida : nomeSaida + '.pptx';
@@ -71,6 +82,25 @@ export default function Gerar() {
         <p>Insira os arquivos e clique em Gerar</p>
       </div>
 
+      <div className="modo-tabs">
+        <button
+          type="button"
+          className={`modo-tab ${modo === 'canto' ? 'ativa' : ''}`}
+          onClick={() => handleModoChange('canto')}
+          disabled={loading}
+        >
+          Marcadores CANTO:N
+        </button>
+        <button
+          type="button"
+          className={`modo-tab ${modo === 'titulos' ? 'ativa' : ''}`}
+          onClick={() => handleModoChange('titulos')}
+          disabled={loading}
+        >
+          Títulos litúrgicos
+        </button>
+      </div>
+
       <form onSubmit={handleGerar} className="gerar-form">
         <div className="form-group">
           <label>Cantos (.docx)</label>
@@ -81,8 +111,17 @@ export default function Gerar() {
             disabled={loading}
           />
           <div className="dica-formato">
-            Marque cada seção com <code>CANTO:N</code> no documento.
-            Ex: <code>CANTO:1</code>, <code>CANTO:2</code>, <code>CANTO:3</code>…
+            {modo === 'canto' ? (
+              <>
+                Marque cada seção com <code>CANTO:N</code> no documento.
+                Ex: <code>CANTO:1</code>, <code>CANTO:2</code>, <code>CANTO:3</code>…
+              </>
+            ) : (
+              <>
+                Os títulos das seções devem estar em <strong>MAIÚSCULAS</strong> no documento.
+                Ex: <code>ABERTURA</code>, <code>GLÓRIA</code>, <code>SANTO</code>, <code>COMUNHÃO</code>
+              </>
+            )}
           </div>
           {docxFile && <span className="file-name">{docxFile.name}</span>}
         </div>

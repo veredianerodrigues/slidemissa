@@ -31,16 +31,104 @@ MAX_LINES_PER_SLIDE = 8
 FIXED_FONT_SIZE = 55
 CANTO_SECTION_RE = re.compile(r'^CANTO:(\d+)\s*$', re.IGNORECASE)
 
+TITLE_ALIASES = {
+    'gloria': 'hino de louvor',
+    'glória': 'hino de louvor',
+    'canto final': 'final',
+    'canto santo santo santo': 'santo',
+    'canto santo': 'santo',
+}
+
+TITULOS_PADRAO = [
+    'CANTO DE ENTRADA',
+    'CANTO DO ATO PENITENCIAL',
+    'CANTO DO GLÓRIA',
+    'CANTO DE ACLAMAÇÃO',
+    'CANTO DO OFERTÓRIO',
+    'SANTO',
+    'CANTO DE COMUNHÃO',
+    'CANTO FINAL',
+]
+
+KEYWORDS_MAP = {
+    'CANTO DE ENTRADA': [
+        'entrada', 'inicio', 'início', 'abertura', 'procissao', 'procissão', 'canto inicial'
+    ],
+    'CANTO DO ATO PENITENCIAL': [
+        'penitencial', 'ato penitencial', 'canto penitencial'
+    ],
+    'CANTO DO GLÓRIA': [
+        'gloria', 'glória', 'hino de louvor'
+    ],
+    'CANTO DE ACLAMAÇÃO': [
+        'aclamacao', 'aclamação', 'evangelho'
+    ],
+    'CANTO DO OFERTÓRIO': [
+        'ofertorio', 'ofertório', 'ofertas', 'oferendas', 'apresentacao das oferendas', 'apresentação das oferendas'
+    ],
+    'SANTO': [
+        'hosana', 'canto santo', 'santo, santo, santo'
+    ],
+    'CANTO DE COMUNHÃO': [
+        'comunhao', 'comunhão', 'hino de comunhão'
+    ],
+    'CANTO FINAL': [
+        'final', 'saida', 'saída', 'envio', 'despedida', 'canto final'
+    ],
+}
+
 
 def normalize(text):
     text = text.lower()
     text = re.sub(r'[,;:.!?]+', ' ', text)
     text = re.sub(r'\s+', ' ', text).strip()
+    text = re.sub(r'\bcanto\s+(?:de|da|do|d[oa]s?)\s+', '', text)
+
+    for alias, canonical in TITLE_ALIASES.items():
+        text = re.sub(r'\b' + re.escape(alias) + r'\b', canonical, text)
+
     text = ''.join(
         c for c in unicodedata.normalize('NFD', text)
         if unicodedata.category(c) != 'Mn'
     )
     return re.sub(r'[\[\]\s]+', ' ', text).strip()
+
+
+def _normalize_kw(text):
+    text = text.lower()
+    return ''.join(
+        c for c in unicodedata.normalize('NFD', text)
+        if unicodedata.category(c) != 'Mn'
+    )
+
+
+def _match_keyword(text_norm):
+    # Título "SANTO" sozinho não contém nenhuma keyword — trata como caso exato
+    if text_norm.strip() == 'santo':
+        return 'SANTO'
+    for title, keywords in KEYWORDS_MAP.items():
+        for kw in keywords:
+            if _normalize_kw(kw) in text_norm:
+                return title
+    return None
+
+
+def _is_section_title(line):
+    """Linha de título: toda em maiúsculas, curta (<= 60 chars), sem pontuação de frase.
+
+    Aceita títulos com dois-pontos no final (ex: 'ENTRADA:', 'GLÓRIA:').
+    """
+    line = line.lstrip('* ').strip()
+    if not line or len(line) > 60:
+        return False
+    if line.endswith(':'):
+        line = line[:-1].strip()
+    if not line:
+        return False
+    # Vírgulas e pontuação de frase indicam letra de canto, não título
+    if any(c in line for c in '.!?;,'):
+        return False
+    return line.upper() == line and len(line) > 4 and any(c.isalpha() for c in line)
 
 
 def _para_is_bold(para):
@@ -66,38 +154,63 @@ def _para_is_bold(para):
     return bold_votes > len(runs) / 2
 
 
-def _extrair_secoes_docx(doc):
+def _extrair_secoes_docx(doc, modo=None):
     """Lê parágrafos do Document e retorna lista de seções brutas.
 
-    Seções são delimitadas por linhas no formato CANTO:N (ex: CANTO:1, CANTO:2).
+    Dois modos de marcação são suportados:
+    - Marcadores CANTO:N (ex: CANTO:1, CANTO:2) — usado quando o documento
+      contém pelo menos um marcador nesse formato.
+    - Títulos litúrgicos em MAIÚSCULAS (ex: CANTO DE ENTRADA, GLÓRIA) — modo
+      antigo, usado quando nenhum marcador CANTO:N é encontrado. Nesse modo os
+      títulos passam por mapeamento de keywords e mapeamento posicional.
     Linhas em branco dentro de uma seção são preservadas como separadores de slide.
+
+    `modo`: 'canto' força marcadores CANTO:N, 'titulos' força títulos litúrgicos,
+    None auto-detecta (CANTO:N se houver pelo menos um marcador).
     """
     raw_lines = []
+    title_eligible = []  # só parágrafos de linha única podem ser títulos
     for para in doc.paragraphs:
         full_text = para.text
         if not full_text.strip():
             raw_lines.append('')
+            title_eligible.append(False)
             continue
         is_bold = _para_is_bold(para)
-        for sub in full_text.split('\n'):
-            text = sub.strip()
-            if text:
-                raw_lines.append(f'* {text}' if is_bold else text)
+        sublines = [s.strip() for s in full_text.split('\n') if s.strip()]
+        for text in sublines:
+            raw_lines.append(f'* {text}' if is_bold else text)
+            title_eligible.append(len(sublines) == 1)
+
+    if modo == 'canto':
+        modo_canto = True
+    elif modo == 'titulos':
+        modo_canto = False
+    else:
+        modo_canto = any(CANTO_SECTION_RE.match(l.lstrip('* ').strip()) for l in raw_lines)
 
     sections_raw = []
     current_raw_title = None
     current_lines = []
 
-    for line in raw_lines:
+    for line, eligible in zip(raw_lines, title_eligible):
         clean = line.lstrip('* ').strip()
-        m = CANTO_SECTION_RE.match(clean)
-        if m:
+        titulo = None
+        if modo_canto:
+            m = CANTO_SECTION_RE.match(clean)
+            if m:
+                titulo = f'CANTO:{m.group(1)}'
+        elif clean and eligible and _is_section_title(clean):
+            # Remove dois-pontos de formatação do título (ex: "ENTRADA:" → "ENTRADA")
+            titulo = clean[:-1].strip() if clean.endswith(':') else clean
+
+        if titulo is not None:
             if current_raw_title is not None:
                 sections_raw.append({
                     'titulo_original': current_raw_title,
                     'lines': current_lines,
                 })
-            current_raw_title = f'CANTO:{m.group(1)}'
+            current_raw_title = titulo
             current_lines = []
         else:
             if current_raw_title is not None:
@@ -117,14 +230,30 @@ def _extrair_secoes_docx(doc):
         while lines and not lines[-1].strip():
             lines.pop()
 
+    if modo_canto:
+        for s in sections_raw:
+            s['title'] = s['titulo_original']
+            s['auto'] = False
+    else:
+        # Aplica mapeamento por keyword e mapeamento posicional
+        for s in sections_raw:
+            matched = _match_keyword(_normalize_kw(s['titulo_original']))
+            s['title'] = matched if matched else s['titulo_original']
+            s['auto'] = not matched
+
+        if 6 <= len(sections_raw) <= len(TITULOS_PADRAO):
+            for i, s in enumerate(sections_raw):
+                if s['auto']:
+                    s['title'] = TITULOS_PADRAO[i]
+
     return sections_raw
 
 
-def validar_docx(docx_path):
+def validar_docx(docx_path, modo=None):
     """Valida o DOCX antes de gerar o PPTX. Retorna erros, avisos e resumo das seções."""
     try:
         doc = Document(docx_path)
-        sections_raw = _extrair_secoes_docx(doc)
+        sections_raw = _extrair_secoes_docx(doc, modo=modo)
     except Exception as e:
         return {'valido': False, 'erros': [f'Não foi possível ler o arquivo: {e}'], 'avisos': [], 'secoes': []}
 
@@ -133,14 +262,28 @@ def validar_docx(docx_path):
     secoes_info = []
 
     if not sections_raw:
-        erros.append(
-            'Nenhuma seção encontrada. '
-            'Use o formato CANTO:N para marcar cada seção (ex: CANTO:1, CANTO:2).'
-        )
+        if modo == 'canto':
+            erros.append(
+                'Nenhuma seção encontrada. '
+                'Use o formato CANTO:N para marcar cada seção (ex: CANTO:1, CANTO:2).'
+            )
+        elif modo == 'titulos':
+            erros.append(
+                'Nenhuma seção (título) encontrada. '
+                'Os títulos devem estar em letras MAIÚSCULAS (ex: CANTO DE ENTRADA).'
+            )
+        else:
+            erros.append(
+                'Nenhuma seção encontrada. '
+                'Use marcadores CANTO:N (ex: CANTO:1, CANTO:2) ou títulos litúrgicos '
+                'em MAIÚSCULAS (ex: CANTO DE ENTRADA).'
+            )
         return {'valido': False, 'erros': erros, 'avisos': avisos, 'secoes': []}
 
     for s in sections_raw:
-        title = s['titulo_original']
+        title = s['title']
+        raw_title = s['titulo_original']
+        reconhecido = not s['auto']
         lines = s['lines']
 
         tem_conteudo = any(l.strip() for l in lines)
@@ -157,8 +300,8 @@ def validar_docx(docx_path):
 
         secoes_info.append({
             'titulo': title,
-            'titulo_original': title,
-            'titulo_reconhecido': True,
+            'titulo_original': raw_title,
+            'titulo_reconhecido': reconhecido,
             'tem_conteudo': tem_conteudo,
             'tem_negrito': tem_negrito,
             'total_linhas': total_linhas,
@@ -166,12 +309,18 @@ def validar_docx(docx_path):
         })
 
         if not tem_conteudo:
-            erros.append(f'Seção "{title}" está vazia — nenhum conteúdo encontrado após o marcador.')
-        elif not tem_negrito:
-            avisos.append(
-                f'Seção "{title}" não tem texto em negrito. '
-                'Refrões devem estar em negrito (selecione e pressione Ctrl+B).'
-            )
+            erros.append(f'Seção "{raw_title}" está vazia — nenhum conteúdo encontrado após o marcador.')
+        else:
+            if not tem_negrito:
+                avisos.append(
+                    f'Seção "{title}" não tem texto em negrito. '
+                    'Refrões devem estar em negrito (selecione e pressione Ctrl+B).'
+                )
+            if not reconhecido:
+                avisos.append(
+                    f'Título "{raw_title}" não é um título litúrgico padrão — '
+                    'verifique se está escrito corretamente.'
+                )
 
     return {
         'valido': len(erros) == 0,
@@ -181,15 +330,15 @@ def validar_docx(docx_path):
     }
 
 
-def parse_docx(docx_path, log=None):
+def parse_docx(docx_path, log=None, modo=None):
     """Lê um DOCX e retorna seções no mesmo formato que parse_txt() retornava."""
     doc = Document(docx_path)
-    sections_raw = _extrair_secoes_docx(doc)
+    sections_raw = _extrair_secoes_docx(doc, modo=modo)
 
     # Converte para o formato interno de blocos usado pelo gerador
     sections = {}
     for s in sections_raw:
-        title = s['titulo_original']
+        title = s['title']
         key = normalize(title)
 
         # Agrupa por linha em branco (separador de slide explícito)
@@ -360,6 +509,15 @@ def create_song_slide(prs, block, bg_color, box_width_cm, box_height_cm, font_mi
     return slide
 
 
+def remove_slide(prs, index):
+    """Remove o slide no índice informado (e sua relação no pacote PPTX)."""
+    sldIdLst = prs.slides._sldIdLst
+    slide_ids = list(sldIdLst)
+    sld_id = slide_ids[index]
+    prs.part.drop_rel(sld_id.rId)
+    sldIdLst.remove(sld_id)
+
+
 def move_slide(prs, from_idx, to_idx):
     if from_idx == to_idx:
         return
@@ -420,7 +578,7 @@ def _inserir_cantos(prs, cantos, output_path, fonte_min=48, fonte_max=60, log=No
             log('  Slide ' + str(i + 1).zfill(2) + ': [' + cantos[key]['titulo'] + ']')
 
     if not placeholders:
-        return False, 'Nenhum marcador do DOCX (CANTO:N) foi encontrado no PPTX.'
+        return False, 'Nenhum marcador do DOCX (CANTO:N ou título litúrgico) foi encontrado no PPTX.'
 
     box_width, box_height = detect_slide_format(prs)
     log(f'Dimensões do slide: {box_width:.2f} x {box_height:.2f} cm')
@@ -440,19 +598,35 @@ def _inserir_cantos(prs, cantos, output_path, fonte_min=48, fonte_max=60, log=No
                 slide_idx += 1
         total_inserted += slide_idx
 
+    # Remove os slides-marcador somente após todas as inserções — remover e em
+    # seguida inserir mais slides faz o python-pptx reaproveitar o nome da
+    # parte removida, corrompendo o PPTX. Os índices originais dos marcadores
+    # ficaram desatualizados pelas inserções anteriores, então localizamos os
+    # placeholders novamente antes de remover (em ordem decrescente).
+    placeholders_atuais = []
+    for i, slide in enumerate(prs.slides):
+        key = slide_normalized_key(slide)
+        if key and key in cantos:
+            placeholders_atuais.append(i)
+
+    for i in reversed(placeholders_atuais):
+        titulo = cantos[slide_normalized_key(prs.slides[i])]['titulo']
+        remove_slide(prs, i)
+        log('  Slide marcador [' + titulo + '] removido.')
+
     prs.save(output_path)
     msg = str(total_inserted) + ' slides inseridos. Total final: ' + str(len(prs.slides)) + ' slides.'
     log(msg)
     return True, msg
 
 
-def gerar(docx_path, pptx_path, output_path, fonte_min=48, fonte_max=60, log=None):
+def gerar(docx_path, pptx_path, output_path, fonte_min=48, fonte_max=60, log=None, modo=None):
     if log is None:
         log = lambda msg: None
 
     try:
         log('Lendo cantos: ' + docx_path)
-        cantos = parse_docx(docx_path, log)
+        cantos = parse_docx(docx_path, log, modo=modo)
 
         log('Carregando ritual: ' + pptx_path)
         prs = Presentation(pptx_path)
