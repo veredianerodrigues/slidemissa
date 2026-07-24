@@ -2,9 +2,10 @@ import axios from 'axios';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
-export const validarDocx = async (docxFile) => {
+export const validarDocx = async (docxFile, modo) => {
   const formData = new FormData();
   formData.append('docx', docxFile);
+  if (modo) formData.append('modo', modo);
   const response = await axios.post(`${API_BASE}/validar`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
@@ -25,11 +26,12 @@ export const gerarEditado = async (secoes, pptxFile, nomeSaida) => {
   return response.data;
 };
 
-export const gerarApresentacao = async (docxFile, pptxFile, nomeSaida) => {
+export const gerarApresentacao = async (docxFile, pptxFile, nomeSaida, modo) => {
   const formData = new FormData();
   formData.append('docx', docxFile);
   formData.append('pptx', pptxFile);
   formData.append('nome_saida', nomeSaida);
+  if (modo) formData.append('modo', modo);
 
   const response = await axios.post(`${API_BASE}/gerar`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
