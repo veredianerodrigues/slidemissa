@@ -5,7 +5,7 @@ import ListaCantos from './ListaCantos';
 import './Gerar.css';
 
 export default function Gerar() {
-  const [modo, setModo] = useState('canto');
+  const [modo, setModo] = useState('titulos');
   const [docxFile, setDocxFile] = useState(null);
   const [pptxFile, setPptxFile] = useState(null);
   const [nomeSaida, setNomeSaida] = useState('missa_pronta');
@@ -85,23 +85,39 @@ export default function Gerar() {
       <div className="modo-tabs">
         <button
           type="button"
-          className={`modo-tab ${modo === 'canto' ? 'ativa' : ''}`}
-          onClick={() => handleModoChange('canto')}
-          disabled={loading}
-        >
-          Marcadores CANTO:N
-        </button>
-        <button
-          type="button"
           className={`modo-tab ${modo === 'titulos' ? 'ativa' : ''}`}
           onClick={() => handleModoChange('titulos')}
           disabled={loading}
         >
           Títulos litúrgicos
         </button>
+        <button
+          type="button"
+          className={`modo-tab ${modo === 'canto' ? 'ativa' : ''}`}
+          onClick={() => handleModoChange('canto')}
+          disabled={loading}
+        >
+          Marcadores CANTO:N
+        </button>
       </div>
 
       <form onSubmit={handleGerar} className="gerar-form">
+        <p className="gerar-descricao">
+          {modo === 'canto' ? (
+            <>
+              Envie o <strong>.docx</strong> com os cantos separados por marcadores{' '}
+              <code>CANTO:N</code> e o <strong>.pptx</strong> do ritual. Os cantos são
+              inseridos no ritual na ordem dos marcadores e você baixa a missa pronta.
+            </>
+          ) : (
+            <>
+              Envie o <strong>.docx</strong> com os cantos e o <strong>.pptx</strong> do
+              ritual. Cada canto é encaixado no ritual pelo título litúrgico da seção e
+              você baixa a missa pronta.
+            </>
+          )}
+        </p>
+
         <div className="form-group">
           <label>Cantos (.docx)</label>
           <input

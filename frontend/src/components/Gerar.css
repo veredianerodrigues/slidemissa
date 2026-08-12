@@ -65,6 +65,29 @@
   margin-bottom: 20px;
 }
 
+.gerar-descricao {
+  margin: 0 0 20px 0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e2e2e2;
+  color: #555;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.gerar-descricao strong {
+  color: #333;
+  font-weight: 600;
+}
+
+.gerar-descricao code {
+  font-family: 'Courier New', monospace;
+  background: #e6e6e6;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+  color: #8f0517;
+}
+
 .form-group {
   margin-bottom: 20px;
 }
