@@ -82,7 +82,8 @@ def normalize(text):
     text = text.lower()
     text = re.sub(r'[,;:.!?]+', ' ', text)
     text = re.sub(r'\s+', ' ', text).strip()
-    text = re.sub(r'\bcanto\s+(?:de|da|do|d[oa]s?)\s+', '', text)
+    # "CANTO DE ENTRADA" e "CANTO ENTRADA" devem gerar a mesma chave
+    text = re.sub(r'\bcanto\s+(?:(?:de|da|do|d[oa]s?)\s+)?', '', text)
 
     for alias, canonical in TITLE_ALIASES.items():
         text = re.sub(r'\b' + re.escape(alias) + r'\b', canonical, text)
@@ -470,12 +471,24 @@ def choose_font_size(text_lines, font_min=48, font_max=60, box_width_cm=BOX_WIDT
     return font_min
 
 
+def _escolher_layout(prs):
+    """Layout para os slides de canto: o 7º (em branco) do primeiro master se existir;
+    senão, o layout com menos placeholders entre todos os masters (PPTX exportados
+    por outras ferramentas podem ter o primeiro master sem layouts)."""
+    if len(prs.slide_layouts) > 6:
+        return prs.slide_layouts[6]
+    layouts = [l for m in prs.slide_masters for l in m.slide_layouts]
+    if not layouts:
+        raise ValueError('O PPTX não possui nenhum layout de slide.')
+    return min(layouts, key=lambda l: len(l.placeholders))
+
+
 def create_song_slide(prs, block, bg_color, box_width_cm, box_height_cm, font_min=48, font_max=60, fixed_font_size=None):
     lines      = block['lines']  # list of {'text': ..., 'bold': ...}
     text_lines = [l['text'] for l in lines]
     font_size  = fixed_font_size if fixed_font_size else choose_font_size(text_lines, font_min, font_max, box_width_cm, box_height_cm)
 
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    slide = prs.slides.add_slide(_escolher_layout(prs))
 
     for shape in list(slide.shapes):
         if shape.is_placeholder or (hasattr(shape, 'text') and not shape.text.strip()):

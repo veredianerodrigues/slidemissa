@@ -11,7 +11,12 @@ export const useApi = () => {
       const result = await apiFunc(...args);
       return result;
     } catch (err) {
-      const message = err.response?.data?.detail || err.message || 'Erro desconhecido';
+      let data = err.response?.data;
+      // Com responseType 'blob' o corpo do erro chega como Blob — extrai o JSON
+      if (data instanceof Blob) {
+        try { data = JSON.parse(await data.text()); } catch { data = null; }
+      }
+      const message = data?.detail || err.message || 'Erro desconhecido';
       setError(message);
       throw err;
     } finally {
